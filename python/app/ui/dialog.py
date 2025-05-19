@@ -26,6 +26,8 @@ class Ui_Dialog(object):
         Dialog.resize(431, 392)
         self.horizontalLayout = QHBoxLayout(Dialog)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.contextContainer = QVBoxLayout(Dialog)
+        self.contextContainer.setObjectName(u"contextContainer")
         self.logo_example = QLabel(Dialog)
         self.logo_example.setObjectName(u"logo_example")
         self.logo_example.setPixmap(QPixmap(u":/res/sg_logo.png"))
@@ -34,14 +36,26 @@ class Ui_Dialog(object):
 
         self.context = QLabel(Dialog)
         self.context.setObjectName(u"context")
-        sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.context.sizePolicy().hasHeightForWidth())
-        self.context.setSizePolicy(sizePolicy)
-        self.context.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
+        self.context_user = QLabel(Dialog)
+        self.context_user.setObjectName(u"context_user")
+        self.project_dir = QLabel(Dialog)
+        self.project_dir.setObjectName(u"project_dir")
 
-        self.horizontalLayout.addWidget(self.context)
+        #sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        #sizePolicy.setHorizontalStretch(0)
+        #sizePolicy.setVerticalStretch(0)
+        #sizePolicy.setHeightForWidth(self.context.sizePolicy().hasHeightForWidth())
+        #sizePolicy.setHeightForWidth(self.context_user.sizePolicy().hasHeightForWidth())
+        #self.context.setSizePolicy(sizePolicy)
+        #self.context.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
+        #self.context_user.setSizePolicy(sizePolicy)
+        #self.context_user.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
+
+        self.contextContainer.addWidget(self.context)
+        self.contextContainer.addWidget(self.context_user)
+        self.contextContainer.addWidget(self.project_dir)
+
+        self.horizontalLayout.addLayout(self.contextContainer)
 
         self.retranslateUi(Dialog)
 

@@ -38,4 +38,4 @@ class SgtkStarterApp(Application):
         menu_callback = lambda: app_payload.dialog.show_dialog(self)
 
         # now register the command with the engine
-        self.engine.register_command("Show Starter Template App...", menu_callback)
+        self.engine.register_command("IO Manager", menu_callback)
