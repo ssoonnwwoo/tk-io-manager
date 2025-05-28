@@ -3,26 +3,30 @@ import os
 import pandas as pd
 
 def select_directory(line_edit_widget):
-    default_dir = os.path.join(os.path.expanduser("~"), "show")
+    # default_dir = os.path.join(os.path.expanduser("~"), "show")
     scan_dir = line_edit_widget.text()
     if not os.path.isdir(scan_dir):
-        scan_dir = default_dir
+        return None
         
-    dir_path = QFileDialog.getExistingDirectory(
+    date_path = QFileDialog.getExistingDirectory(
         None, # 부모위젯 x
         "Select scan data folder",
         scan_dir, 
         QFileDialog.ShowDirsOnly
     )
-    if dir_path:
-        line_edit_widget.setText(dir_path)
-    return dir_path
+    if date_path:
+        if not os.path.abspath(date_path).startswith(os.path.abspath(scan_dir)):
+            QMessageBox.warning(None, "Warning", f"'{date_path}' Out of boundary")
+            return None
+        line_edit_widget.setText(date_path)
+        return date_path
+    return None
 
 def select_xlsx_file(line_edit_widget):
-    default_dir = os.path.join(os.path.expanduser("~"), "show")
+    # default_dir = os.path.join(os.path.expanduser("~"), "show")
     current_path = line_edit_widget.text()
     if not os.path.isdir(current_path):
-        current_path = default_dir
+        return None
 
     file_path, _ = QFileDialog.getOpenFileName(
         None,  # 부모 위젯 없음
@@ -30,8 +34,11 @@ def select_xlsx_file(line_edit_widget):
         current_path,
         "XLSX files (*.xlsx)"
     )
-
-    line_edit_widget.setText(os.path.dirname(file_path))
+    if file_path:
+        if not os.path.abspath(file_path).startswith(os.path.abspath(current_path)):
+            QMessageBox.warning(None, "Warning", f"'{date_path}' Out of boundary")
+            return None
+    # line_edit_widget.setText(os.path.dirname(file_path))
     return file_path
 
 def toggle_edit_mode(table, edit_mode):

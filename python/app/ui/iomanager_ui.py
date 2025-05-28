@@ -21,25 +21,42 @@ from ..tools.convert import exrs_to_jpgs, mov_to_exrs, exrs_to_video, exrs_to_mo
 import os
 import pandas as pd
 import shotgun_api3
+import sgtk
+import sys
 
-sg = shotgun_api3.Shotgun("https://westworld5th.shotgrid.autodesk.com",
-                            script_name="ssoonnwwoo",
-                            api_key="hueyvBxznqw&op8wvuzljtljv")
+resource_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources"))
+if resource_path not in sys.path:
+    sys.path.append(resource_path)
+import resources_rc
+
+
+# sg = shotgun_api3.Shotgun("https://westworld5th.shotgrid.autodesk.com",
+#                             script_name="ssoonnwwoo",
+#                             api_key="hueyvBxznqw&op8wvuzljtljv")
+
+
 
 class IOManagerWidget(QWidget):
     def __init__(self):
         super().__init__()
-        show_dir = os.path.join(os.path.expanduser("~"), "show")
-        project_list = os.listdir(show_dir)
-        project_list.insert(0, "Select your project first") 
+        # Get the engine that is currently running.
+        current_engine = sgtk.platform.current_engine()
+        # Grab the already created Sgtk instance from the current engine.
+        tk = current_engine.sgtk
+        self.sg = tk.shotgun
+        context = current_engine.context
+        project_name = context.project.get("name")
+        #show_dir = os.path.join(os.path.expanduser("~"), "show")
+
         # Widgets
-        project_label = QLabel("Select project: ")
-        self.project_cb = QComboBox()
-        self.project_cb.setCurrentIndex(0)
-        self.project_cb.addItems(project_list)
+        p_label = QLabel("Current project: ")
+        self.project_label = QLabel(project_name)
         file_path_label = QLabel("File path:")
         self.file_path_le = QLineEdit()
         self.file_path_le.setPlaceholderText("Input your shot path")
+        base_path = os.path.expanduser("~")
+        scan_path = os.path.join(base_path, "show", project_name, "product", "scan")
+        self.file_path_le.setText(scan_path)
         shot_select_btn = QPushButton("Select")
         # shot_load_btn = QPushButton("Load")
 
@@ -61,7 +78,7 @@ class IOManagerWidget(QWidget):
         shot_select_btn.clicked.connect(self.on_select_clicked)
         self.excel_edit_btn.clicked.connect(self.on_edit_clicked)
         excel_save_btn.clicked.connect(self.on_save_clicked)
-        self.project_cb.currentTextChanged.connect(self.on_project_selected)
+        # self.project_cb.currentTextChanged.connect(self.on_project_selected)
         select_excel_btn.clicked.connect(self.on_select_excel_clicked)
         publish_btn.clicked.connect(self.on_publish_clicked)
 
@@ -74,9 +91,10 @@ class IOManagerWidget(QWidget):
         excel_btn_layout2 = QHBoxLayout()
         excel_container = QVBoxLayout()
         excel_label_conatainer = QVBoxLayout()
-
-        shot_select_container.addWidget(project_label)
-        shot_select_container.addWidget(self.project_cb)
+        
+        shot_select_container.addWidget(p_label)
+        shot_select_container.addWidget(self.project_label)
+        shot_select_container.addStretch()
         shot_select_container.addWidget(file_path_label)
         shot_select_container.addWidget(self.file_path_le)
         shot_select_container.addWidget(shot_select_btn)
@@ -101,10 +119,10 @@ class IOManagerWidget(QWidget):
         self.setLayout(main_layout)
         self.edit_mode = False
 
-    def on_project_selected(self, project_name):
-        base_path = os.path.expanduser("~")
-        scan_path = os.path.join(base_path, "show", project_name, "product", "scan")
-        self.file_path_le.setText(scan_path)
+    # def set_scan_path(self, project_name):
+    #     base_path = os.path.expanduser("~")
+    #     scan_path = os.path.join(base_path, "show", project_name, "product", "scan")
+    #     self.file_path_le.setText(scan_path)
 
     def on_select_clicked(self):
         selected_path = select_directory(self.file_path_le)
@@ -193,7 +211,6 @@ class IOManagerWidget(QWidget):
         self.table.setColumnCount(len(df.columns) + 1)
         header_list = ["check"] + df.columns.tolist()
         self.table.setHorizontalHeaderLabels(header_list)
-
         for row_idx, row_data in df.iterrows():
             checkbox = QCheckBox()
             checkbox.clicked.connect(lambda _, row = row_idx: self.on_checkbox_clicked(row, xlsx_path))
@@ -219,6 +236,8 @@ class IOManagerWidget(QWidget):
 
     def on_checkbox_clicked(self, row, xlsx_path):
         # print(f"[TEST] Checkbox clicked on row {row}")
+        app_root = os.path.dirname(__file__)
+        print(app_root)
         df = pd.read_excel(xlsx_path)
 
         seq = df.at[row, "seq_name"]
@@ -273,7 +292,7 @@ class IOManagerWidget(QWidget):
         shot_info_list = get_publish_info(xlsx_file_path, checked_rows)
         home_dir = os.path.expanduser("~")
         base_path = os.path.join(home_dir, "show")
-        project_name = self.project_cb.currentText()
+        project_name = self.project_label.text()
         for shot_info in shot_info_list:
             seq = shot_info["sequence"]
             shot = shot_info["shot"]
@@ -334,11 +353,11 @@ class IOManagerWidget(QWidget):
                     thumbnail_path = exrs_to_thumbnail(org_path, sg_path)
 
             if all(os.path.isfile(path) for path in [mp4_path, webm_path, filmstrip_path, thumbnail_path]):
-                project_id = sg.find_one("Project", [["name", "is", project_name]], ["id"])
+                project_id = self.sg.find_one("Project", [["name", "is", project_name]], ["id"])
                 # Create sequence
                 # 시퀀스 존재 여부 확인
                 sequence_name = seq
-                sequence = sg.find_one("Sequence", [
+                sequence = self.sg.find_one("Sequence", [
                     ["project", "is", project_id],
                     ["code", "is", sequence_name]
                 ], ['code'])
@@ -349,7 +368,7 @@ class IOManagerWidget(QWidget):
                         "project": project_id,
                         "code": sequence_name
                     }
-                    sequence = sg.create("Sequence", sequence_data)
+                    sequence = self.sg.create("Sequence", sequence_data)
                     print(f"[COMPLETE] Sequence created: {sequence['code']}")
                 else:
                     print(f"[INFO] Sequence already exists: {sequence['code']}")
@@ -361,15 +380,15 @@ class IOManagerWidget(QWidget):
                     "code": shot_name,          
                     "sg_sequence": sequence
                 }
-                created_shot = sg.create("Shot", shot_data)
+                created_shot = self.sg.create("Shot", shot_data)
                 print(f"[COMPLETE] Created Shot: {created_shot['code']}")
 
                 # thumbnail upload to shot
-                sg.upload_thumbnail("Shot", created_shot["id"], thumbnail_path)
+                self.sg.upload_thumbnail("Shot", created_shot["id"], thumbnail_path)
                 print(f"[COMPLETE] Uploaded thumbnail: {thumbnail_path}")
 
                 # filmstrip upload to shot
-                sg.upload_filmstrip_thumbnail("Shot", created_shot["id"], filmstrip_path)
+                self.sg.upload_filmstrip_thumbnail("Shot", created_shot["id"], filmstrip_path)
                 print(f"[COMPLETE] Uploaded filmstrip thumbnail: {filmstrip_path}")
 
                 # create version and link to shot
@@ -380,16 +399,16 @@ class IOManagerWidget(QWidget):
                     "entity": created_shot,
                     "description": f"Description for {shot}"
                 }
-                version = sg.create("Version", version_data)
+                version = self.sg.create("Version", version_data)
                 print(f"[COMPLETE] Created Version: {version['code']}")
                 
                 # mp4 upload to version
-                sg.upload("Version", version["id"], mp4_path, field_name="sg_uploaded_movie")
+                self.sg.upload("Version", version["id"], mp4_path, field_name="sg_uploaded_movie")
                 print(f"[COMPLETE] Uploaded mp4 movie: {mp4_path}")
 
                 # jpg, filmstrip upload to Version
-                sg.upload_thumbnail("Version", version["id"], thumbnail_path)
-                sg.upload_filmstrip_thumbnail("Version", version["id"], filmstrip_path)
+                self.sg.upload_thumbnail("Version", version["id"], thumbnail_path)
+                self.sg.upload_filmstrip_thumbnail("Version", version["id"], filmstrip_path)
 
                 print(f"[COMPLETE]: {shot} publish completed\n\n")
 

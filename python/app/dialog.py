@@ -57,12 +57,12 @@ class AppDialog(QtGui.QWidget):
         self.setLayout(layout)
         self.resize(1400, 800)
 
-        self._app = sgtk.platform.current_bundle()
-        context = self._app.context
-        project_name = context.project.get("name")
-        if project_name:
-            self.io_widget.project_cb.setCurrentText(project_name)
-            self.io_widget.on_project_selected(project_name)
+        # self._app = sgtk.platform.current_bundle()
+        # context = self._app.context
+        # project_name = context.project.get("name")
+        # if project_name:
+        #     self.io_widget.project_cb.setCurrentText(project_name)
+        #     self.io_widget.on_project_selected(project_name)
 
         # most of the useful accessors are available through the Application class instance
         # it is often handy to keep a reference to this. You can get it via the following method:

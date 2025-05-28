@@ -18,3 +18,14 @@ QListView, QTableView, QScrollArea {
 }
 
 */
+
+QCheckBox::indicator {
+    border: 2px solid #5A5A5A;
+    width: 16px;
+    height: 16px;
+    border-radius: 2px
+}
+
+QCheckBox::indicator:checked {
+    image: url(:/res/check.png);
+}
