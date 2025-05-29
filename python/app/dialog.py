@@ -16,7 +16,6 @@ import threading
 # by importing QT from sgtk rather than directly, we ensure that
 # the code will be compatible with both PySide and PyQt.
 from sgtk.platform.qt import QtCore, QtGui
-from .ui.dialog import Ui_Dialog
 from .ui.iomanager_ui import IOManagerWidget
 
 # standard toolkit logger

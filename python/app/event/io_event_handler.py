@@ -1,6 +1,5 @@
 from PySide6.QtWidgets import QFileDialog, QTableWidget, QMessageBox
 import os
-import pandas as pd
 
 def select_directory(line_edit_widget):
     # default_dir = os.path.join(os.path.expanduser("~"), "show")

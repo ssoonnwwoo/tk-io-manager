@@ -6,7 +6,7 @@ from tank.platform.qt import QtGui
 for name, cls in QtGui.__dict__.items():
     if isinstance(cls, type): globals()[name] = cls
 
-
+from ..event.select_btn_clicked import on_select_clicked
 from ..event.io_event_handler import select_directory, toggle_edit_mode, select_xlsx_file
 from ..tools.export_metadata import export_metadata
 from ..tools.save_as_xlsx import save_as_xlsx
@@ -20,67 +20,61 @@ from ..tools.rename import rename_sequence
 from ..tools.convert import exrs_to_jpgs, mov_to_exrs, exrs_to_video, exrs_to_montage, exrs_to_thumbnail
 import os
 import pandas as pd
-import shotgun_api3
 import sgtk
 import sys
+
 
 resource_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources"))
 if resource_path not in sys.path:
     sys.path.append(resource_path)
 import resources_rc
 
-
-# sg = shotgun_api3.Shotgun("https://westworld5th.shotgrid.autodesk.com",
-#                             script_name="ssoonnwwoo",
-#                             api_key="hueyvBxznqw&op8wvuzljtljv")
-
-
-
-class IOManagerWidget(QWidget):
+class IOManagerWidget(QWidget): 
     def __init__(self):
         super().__init__()
-        # Get the engine that is currently running.
-        current_engine = sgtk.platform.current_engine()
-        # Grab the already created Sgtk instance from the current engine.
-        tk = current_engine.sgtk
-        self.sg = tk.shotgun
-        context = current_engine.context
-        project_name = context.project.get("name")
-        #show_dir = os.path.join(os.path.expanduser("~"), "show")
+        # sgtk settings
+        self.current_engine = sgtk.platform.current_engine()
+        self.sg = self._get_shotgun_api()
+        self.PROJECT_NAME = self._get_project_name()
 
-        # Widgets
+        # PATH settings
+        HOME_PATH = os.path.expanduser("~")
+        # ex : HOME_PATH = /home/rapa
+        self.DEFAULT_PATH = os.path.join(HOME_PATH, "show", self.PROJECT_NAME, "product", "scan") 
+        # ex : DEFAULT_PATH = /home/rapa/show/{project_name}/product/scan
+
+
+
+        # Widgets Top
         p_label = QLabel("Current project: ")
-        self.project_label = QLabel(project_name)
+        self.project_label = QLabel(self.PROJECT_NAME)
         file_path_label = QLabel("File path:")
         self.file_path_le = QLineEdit()
         self.file_path_le.setPlaceholderText("Input your shot path")
-        base_path = os.path.expanduser("~")
-        scan_path = os.path.join(base_path, "show", project_name, "product", "scan")
-        self.file_path_le.setText(scan_path)
+        self.file_path_le.setText(self.DEFAULT_PATH)
         shot_select_btn = QPushButton("Select")
-        # shot_load_btn = QPushButton("Load")
-
+        
+        # Widgets Mid(Table)
         self.table = QTableWidget()
-
+        
+        # Widgets Bottom
         current_excel_label = QLabel("Currently displayed Excel file:")
         self.excel_label = QLabel("Ready to load")
         excel_save_btn = QPushButton("Version and Save")
         self.excel_edit_btn = QPushButton("Enable Edit")
         select_excel_btn = QPushButton("Select Excel")
-
         publish_btn = QPushButton("Publish")
 
+
+
         # Event Handle
-        # shot_select_btn.clicked.connect(
-        #     lambda: select_directory(self.file_path_le)
-        # )
-        # shot_load_btn.clicked.connect(self.on_load_clicked)
-        shot_select_btn.clicked.connect(self.on_select_clicked)
+        shot_select_btn.clicked.connect(lambda : on_select_clicked(self))
         self.excel_edit_btn.clicked.connect(self.on_edit_clicked)
         excel_save_btn.clicked.connect(self.on_save_clicked)
-        # self.project_cb.currentTextChanged.connect(self.on_project_selected)
         select_excel_btn.clicked.connect(self.on_select_excel_clicked)
         publish_btn.clicked.connect(self.on_publish_clicked)
+
+
 
         # Layout
         main_layout = QVBoxLayout()
@@ -124,14 +118,36 @@ class IOManagerWidget(QWidget):
     #     scan_path = os.path.join(base_path, "show", project_name, "product", "scan")
     #     self.file_path_le.setText(scan_path)
 
-    def on_select_clicked(self):
+    def _get_project_name(self):
+        """
+        Get the project name from engine & context that is currently running
+        arg: current engine ex) tk-desktop
+        return: project name
+        """
+        context = self.current_engine.context
+        project_name = context.project.get("name")
+        return project_name
+
+    def _get_shotgun_api(self):
+        """
+        Get Shotgun API from engine & sgtk
+        arg: current engine ex) tk-desktop
+        return: shotgun api
+        """
+        # Grab the already created Sgtk instance from the current engine.
+        tk = self.current_engine.sgtk
+        sg = tk.shotgun
+        return sg
+
+    def on_select_clicked2(self):
         selected_path = select_directory(self.file_path_le)
         if not selected_path:
             return
-        
+
         date_path = self.file_path_le.text()
         # First get latest version of xlsx file
         latest_xlsx_path = get_latest_version_file(date_path)
+        ################################################################################################
         # If not xlsx file, export metadata and save as {prefix_date}_list_v001.xlsx
         if not latest_xlsx_path:
             meta_data = export_metadata(date_path)
