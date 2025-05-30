@@ -5,7 +5,7 @@ from .convert import exr_to_jpg, mov_to_jpg
 import pyseq
 
 def export_metadata(date_path):
-    # meta data 리스트, xlsx 파일의 한 행이 됌
+    # meta data list, xlsx 파일의 한 행이 됌
     meta_list = []
 
     # 썸네일 저장 폴더 생성

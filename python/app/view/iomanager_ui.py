@@ -6,18 +6,19 @@ from tank.platform.qt import QtGui
 for name, cls in QtGui.__dict__.items():
     if isinstance(cls, type): globals()[name] = cls
 
-from ..event.select_btn_clicked import on_select_clicked
-from ..event.io_event_handler import select_directory, toggle_edit_mode, select_xlsx_file
-from ..tools.export_metadata import export_metadata
-from ..tools.save_as_xlsx import save_as_xlsx
-from ..tools.get_latest_xlsx_file import get_latest_version_file
-from ..tools.get_new_version_file import get_new_version_name
-from ..tools.table_to_metalist import save_table_to_xlsx
-from ..tools.extract_directory_column import extract_directory_column
-from ..tools.generate_directory_list import generate_directory_list
-from ..tools.get_publish_info import get_publish_info
-from ..tools.rename import rename_sequence
-from ..tools.convert import exrs_to_jpgs, mov_to_exrs, exrs_to_video, exrs_to_montage, exrs_to_thumbnail
+from ..controller.select_btn_clicked import on_select_clicked
+from ..model.excel_manager import ExcelManager
+from ..controller.io_event_handler import select_directory, toggle_edit_mode, select_xlsx_file
+from ..model.export_metadata import export_metadata
+from ..model.save_as_xlsx import save_as_xlsx
+from ..model.get_latest_xlsx_file import get_latest_version_file
+from ..model.get_new_version_file import get_new_version_name
+from ..model.table_to_metalist import save_table_to_xlsx
+from ..model.extract_directory_column import extract_directory_column
+from ..model.generate_directory_list import generate_directory_list
+from ..model.get_publish_info import get_publish_info
+from ..model.rename import rename_sequence
+from ..model.convert import exrs_to_jpgs, mov_to_exrs, exrs_to_video, exrs_to_montage, exrs_to_thumbnail
 import os
 import pandas as pd
 import sgtk
@@ -42,6 +43,8 @@ class IOManagerWidget(QWidget):
         # ex : HOME_PATH = /home/rapa
         self.DEFAULT_PATH = os.path.join(HOME_PATH, "show", self.PROJECT_NAME, "product", "scan") 
         # ex : DEFAULT_PATH = /home/rapa/show/{project_name}/product/scan
+
+        self.excel_manager = ExcelManager()
 
 
 
