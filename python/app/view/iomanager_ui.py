@@ -7,22 +7,19 @@ for name, cls in QtGui.__dict__.items():
     if isinstance(cls, type): globals()[name] = cls
 
 from ..controller.select_btn_clicked import on_select_clicked
+from ..controller.table_checkbox_clicked import on_checkbox_clicked
 from ..model.excel_manager import ExcelManager
-from ..controller.io_event_handler import select_directory, toggle_edit_mode, select_xlsx_file
-from ..model.export_metadata import export_metadata
-from ..model.save_as_xlsx import save_as_xlsx
-from ..model.get_latest_xlsx_file import get_latest_version_file
+
+from ..controller.io_event_handler import toggle_edit_mode, select_xlsx_file
 from ..model.get_new_version_file import get_new_version_name
 from ..model.table_to_metalist import save_table_to_xlsx
-from ..model.extract_directory_column import extract_directory_column
-from ..model.generate_directory_list import generate_directory_list
 from ..model.get_publish_info import get_publish_info
 from ..model.rename import rename_sequence
 from ..model.convert import exrs_to_jpgs, mov_to_exrs, exrs_to_video, exrs_to_montage, exrs_to_thumbnail
 import os
-import pandas as pd
 import sgtk
 import sys
+import pandas as pd
 
 
 resource_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources"))
@@ -38,15 +35,16 @@ class IOManagerWidget(QWidget):
         self.sg = self._get_shotgun_api()
         self.PROJECT_NAME = self._get_project_name()
 
-        # PATH settings
+        # path settings
         HOME_PATH = os.path.expanduser("~")
         # ex : HOME_PATH = /home/rapa
         self.DEFAULT_PATH = os.path.join(HOME_PATH, "show", self.PROJECT_NAME, "product", "scan") 
         # ex : DEFAULT_PATH = /home/rapa/show/{project_name}/product/scan
 
-        self.excel_manager = ExcelManager()
+        # Create ExcelManager instance
+        self.excel_manager = ExcelManager(self)
 
-
+        self.checked_rows = []
 
         # Widgets Top
         p_label = QLabel("Current project: ")
@@ -68,16 +66,12 @@ class IOManagerWidget(QWidget):
         select_excel_btn = QPushButton("Select Excel")
         publish_btn = QPushButton("Publish")
 
-
-
         # Event Handle
         shot_select_btn.clicked.connect(lambda : on_select_clicked(self))
         self.excel_edit_btn.clicked.connect(self.on_edit_clicked)
         excel_save_btn.clicked.connect(self.on_save_clicked)
         select_excel_btn.clicked.connect(self.on_select_excel_clicked)
         publish_btn.clicked.connect(self.on_publish_clicked)
-
-
 
         # Layout
         main_layout = QVBoxLayout()
@@ -116,10 +110,7 @@ class IOManagerWidget(QWidget):
         self.setLayout(main_layout)
         self.edit_mode = False
 
-    # def set_scan_path(self, project_name):
-    #     base_path = os.path.expanduser("~")
-    #     scan_path = os.path.join(base_path, "show", project_name, "product", "scan")
-    #     self.file_path_le.setText(scan_path)
+
 
     def _get_project_name(self):
         """
@@ -142,58 +133,6 @@ class IOManagerWidget(QWidget):
         sg = tk.shotgun
         return sg
 
-    def on_select_clicked2(self):
-        selected_path = select_directory(self.file_path_le)
-        if not selected_path:
-            return
-
-        date_path = self.file_path_le.text()
-        # First get latest version of xlsx file
-        latest_xlsx_path = get_latest_version_file(date_path)
-        ################################################################################################
-        # If not xlsx file, export metadata and save as {prefix_date}_list_v001.xlsx
-        if not latest_xlsx_path:
-            meta_data = export_metadata(date_path)
-            latest_xlsx_path = save_as_xlsx(date_path, latest_xlsx_path, meta_data)
-            self.update_table(latest_xlsx_path)
-            self.excel_label.setText(latest_xlsx_path)
-            return
-        
-        # If xlsx file exists
-        meta_data_list = export_metadata(date_path)
-
-        # Compare "Directory" column
-        dirs_from_xlsx = sorted(extract_directory_column(latest_xlsx_path))
-        current_dirs = sorted(generate_directory_list(meta_data_list))
-
-        if dirs_from_xlsx == current_dirs:
-            self.update_table(latest_xlsx_path)
-            self.excel_label.setText(latest_xlsx_path)
-        else:
-            self.show_update_dialog(meta_data_list, date_path)
-
-    def show_update_dialog(self, meta_data_list, date_path):
-        reply = QMessageBox.question(
-            self,
-            f"Update Detected in {os.path.basename(date_path)}",
-            "Something changed!\nDo you want to update & open the xlsx file",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
-            new_name = get_new_version_name(date_path)
-            new_path = os.path.join(date_path, new_name)
-            save_as_xlsx(date_path, new_name, meta_data_list)
-            self.update_table(new_path)
-            self.excel_label.setText(new_path)
-        else:
-            print("[CANCEL] Update canceled")
-
-            latest_xlsx_path = get_latest_version_file(date_path)
-            if latest_xlsx_path:
-                self.update_table(latest_xlsx_path)
-                self.excel_label.setText(latest_xlsx_path)
-
     def on_edit_clicked(self):
         self.edit_mode = toggle_edit_mode(self.table, self.edit_mode)
         if self.edit_mode:
@@ -202,8 +141,6 @@ class IOManagerWidget(QWidget):
             self.excel_edit_btn.setText("Enable Edit")
 
     def on_save_clicked(self):
-        # csv_path = self.excel_label.text()
-        # save_table_to_csv(self.table, csv_path, parent=self)
         if not os.path.exists(self.file_path_le.text()):
             return
         xlsx_path = get_new_version_name(self.file_path_le.text())
@@ -232,7 +169,7 @@ class IOManagerWidget(QWidget):
         self.table.setHorizontalHeaderLabels(header_list)
         for row_idx, row_data in df.iterrows():
             checkbox = QCheckBox()
-            checkbox.clicked.connect(lambda _, row = row_idx: self.on_checkbox_clicked(row, xlsx_path))
+            checkbox.clicked.connect(lambda _, row = row_idx: on_checkbox_clicked(self, row, xlsx_path))
             self.table.setCellWidget(row_idx, 0, checkbox)
 
             for col_idx, header in enumerate(df.columns):
@@ -252,31 +189,6 @@ class IOManagerWidget(QWidget):
                     item = QTableWidgetItem(str(value))
                     self.table.setItem(row_idx, col_idx + 1, item)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-
-    def on_checkbox_clicked(self, row, xlsx_path):
-        # print(f"[TEST] Checkbox clicked on row {row}")
-        app_root = os.path.dirname(__file__)
-        print(app_root)
-        df = pd.read_excel(xlsx_path)
-
-        seq = df.at[row, "seq_name"]
-        shot = df.at[row, "shot_name"]
-
-        if pd.isna(seq) or pd.isna(shot) or str(seq).strip() == "" or str(shot).strip() == "":
-            QMessageBox.warning(
-            self,
-            "Missing Data",
-            f"Row[{row + 1}] missing 'seq_name' or 'shot_name'.\nThis row cannot be selected.",
-            QMessageBox.Ok
-            )
-
-            checkbox = self.table.cellWidget(row, 0)
-            if isinstance(checkbox, QCheckBox):
-                checkbox.setChecked(False)
-            return
-
-        else:
-            print(f"[OK] seq: {seq}, shot: {shot} at row {row + 1}")
 
     def set_thumbnail_cell(self, row, col, img_path):
         label = QLabel()

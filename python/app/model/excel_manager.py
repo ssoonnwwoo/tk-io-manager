@@ -1,3 +1,6 @@
+from openpyxl import Workbook
+from openpyxl.drawing.image import Image
+from openpyxl.utils import get_column_letter
 import os
 import re
 import pyseq
@@ -5,8 +8,9 @@ import subprocess
 import json
 
 class ExcelManager:
-    def __init__(self):
+    def __init__(self, iomanager_instance):
         self.date_directory_path = ""
+        self.iomanager = iomanager_instance
     
     def set_date_path(self, date_directory_path):
         self.date_directory_path = date_directory_path
@@ -25,20 +29,20 @@ class ExcelManager:
                 versioned_files.append((version, fname))
         # ex ) versioned_files: [(1, 20250529_list_v001.xlsx), (2, 20250529_list_v002.xlsx), ..., (14, 20250529_list_v014.xlsx)]
 
+        meta_data_list = self.export_metadata(self.date_directory_path)
+        
         if not versioned_files:
-            print("No versioned file found")
-            latest_xlsx_path = None
-        else :
+            # If there is no xlsx file. Make _v001.xlsx
+            print("[INFO] No versioned file found. v001 will be created")
+            new_xlsx_path = self.save_as_xlsx(meta_data_list)
+            latest_xlsx_path = new_xlsx_path
+        else:
             # return latest version filename
             latest_version_tuple = max(versioned_files)
             latest_xlsx_path = os.path.join(self.date_directory_path, latest_version_tuple[1])
-
-        if not latest_xlsx_path:
-            meta_data_list = self.export_metadata(self.date_directory_path)
-
-
-        return os.path.join(self.date_directory_path, latest_version_tuple[1])
+        return latest_xlsx_path
     
+
     def export_metadata(self, date_path):
         # meta data list: one of xlsx rows 
         meta_list = []
@@ -58,7 +62,14 @@ class ExcelManager:
                     thumb_path = os.path.join(thumbnails_dir, thumb_name)
                     # If thumbnail not exist, make thumbnail
                     if not os.path.exists(thumb_path):
-                        if not self.make_excel_thumbnail(first_frame_path, thumb_path):
+                        make_excel_thumbnail_result = self.make_excel_thumbnail(first_frame_path, thumb_path)
+                        if not make_excel_thumbnail_result:
+                            QMessageBox.warning(
+                                self.iomanager,
+                                "Error",
+                                f"Error occurred while attempting to convert thumbnail.\nIO Manager skips the thumbnail creation process.",
+                                QMessageBox.Ok
+                            )
                             thumb_path = ""
                     # Skip making thumbnail if thumbnail exist
                     else:
@@ -79,7 +90,7 @@ class ExcelManager:
 
                     # else:
                     #     print(f"[SKIP] Thumbnail already exist: {thumb_path}")
-                    pass
+                    continue
                 else:
                     print(f"[SKIP] {seq} is not EXR OR MOV")
                     continue
@@ -96,17 +107,8 @@ class ExcelManager:
                 meta["thumbnail_path"] = thumb_path
                 meta_list.append(meta)
         return meta_list
-    
-    def make_excel_thumbnail(self, input_exr_path, output_jpg_path):
-        import os
-        print("현재 PATH:", os.environ.get("PATH"))
 
-
-
-        if not os.path.isfile(input_exr_path):
-            print(f"[ERROR] EXR does not exist: {input_exr_path}")
-            return False
-        
+    def make_excel_thumbnail(self, input_exr_path, output_jpg_path):        
         cmd = [
             "oiiotool",
             input_exr_path,
@@ -120,3 +122,54 @@ class ExcelManager:
             return False
         print(f"[COMPLETE] {input_exr_path} >>>>> {output_jpg_path}")
         return True
+
+
+
+    def save_as_xlsx(self, meta_data_list, xl_name = None):
+        """
+        Save meta datas as xlsx using openpyxl
+
+        meta_data : data, one row of xlsx rows
+        meta_data_list = [meta_data1, meta_data2, ... , meta_dataN]
+        """
+        if not meta_data_list:
+            QMessageBox.warning(self.iomanager, "No shot error", "No shot for exporting excel file")
+            return None
+        if not xl_name:
+            xl_name = f"{os.path.basename(self.date_directory_path)}_list_v001.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Metadata"
+
+        default_fields = ["thumbnail", "thumbnail_path", "shot_name", "seq_name"]
+        all_keys_set = set()
+        for meta_data in meta_data_list:
+            for key in meta_data.keys():
+                all_keys_set.add(key)
+
+        all_fields = default_fields + list(all_keys_set) # headers
+        ws.append(all_fields)
+
+        # Insert meta data to work sheet
+        for row_idx, meta_data in enumerate(meta_data_list, start=2): # Start at row2(Row1 : header)
+            for col_idx, field in enumerate(all_fields, start=1):
+                value = meta_data.get(field, "")
+                # if value's type is list
+                if isinstance(value, list):
+                    value = ", ".join(str(v) for v in value)
+                ws.cell(row=row_idx, column=col_idx, value=value)
+
+            # Insert thumbnail to cell
+            thumb_path = meta_data.get("thumbnail_path")
+            if thumb_path and os.path.exists(thumb_path):
+                col_letter = get_column_letter(all_fields.index("thumbnail") + 1)
+                cell_ref = f"{col_letter}{row_idx}"
+                img = Image(thumb_path)
+                img.width = 192
+                img.height = 108
+                ws.add_image(img, cell_ref)
+        xl_path = os.path.join(self.date_directory_path, xl_name)
+        wb.save(xl_path)
+
+        print(f"[COMPLETE] Metadata exported to:\n{xl_path}")
+        return xl_path

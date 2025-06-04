@@ -10,8 +10,8 @@
 
 
 from sgtk.platform import Application
-
-
+from rez.resolved_context import ResolvedContext
+import os
 class SgtkStarterApp(Application):
     """
     The app entry point. This class is responsible for initializing and tearing down
@@ -22,6 +22,9 @@ class SgtkStarterApp(Application):
         """
         Called as the application is being initialized
         """
+        rez_packages = ["oiio-3.0.6.1"]
+        context = ResolvedContext(rez_packages)
+        context.apply()
 
         # first, we use the special import_module command to access the app module
         # that resides inside the python folder in the app. This is where the actual UI
