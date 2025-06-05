@@ -1,7 +1,7 @@
 import os
 import re
 
-def get_new_version_name(date_path):
+def get_new_xl_name(date_path):
     date_prefix = os.path.basename(os.path.normpath(date_path))
     
     pattern = re.compile(rf"{date_prefix}_list_v(\d{{3}})\.xlsx$")

@@ -8,10 +8,10 @@ for name, cls in QtGui.__dict__.items():
 
 from ..controller.select_btn_clicked import on_select_clicked
 from ..controller.table_checkbox_clicked import on_checkbox_clicked
+from ..controller.save_btn_clicked import on_save_clicked
 from ..model.excel_manager import ExcelManager
 
 from ..controller.io_event_handler import toggle_edit_mode, select_xlsx_file
-from ..model.get_new_version_file import get_new_version_name
 from ..model.table_to_metalist import save_table_to_xlsx
 from ..model.get_publish_info import get_publish_info
 from ..model.rename import rename_sequence
@@ -20,7 +20,7 @@ import os
 import sgtk
 import sys
 import pandas as pd
-
+from openpyxl import load_workbook
 
 resource_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources"))
 if resource_path not in sys.path:
@@ -69,7 +69,7 @@ class IOManagerWidget(QWidget):
         # Event Handle
         shot_select_btn.clicked.connect(lambda : on_select_clicked(self))
         self.excel_edit_btn.clicked.connect(self.on_edit_clicked)
-        excel_save_btn.clicked.connect(self.on_save_clicked)
+        excel_save_btn.clicked.connect(lambda : on_save_clicked(self))
         select_excel_btn.clicked.connect(self.on_select_excel_clicked)
         publish_btn.clicked.connect(self.on_publish_clicked)
 
@@ -140,7 +140,7 @@ class IOManagerWidget(QWidget):
         else:
             self.excel_edit_btn.setText("Enable Edit")
 
-    def on_save_clicked(self):
+    def on_save_clicked2(self):
         if not os.path.exists(self.file_path_le.text()):
             return
         xlsx_path = get_new_version_name(self.file_path_le.text())
@@ -162,32 +162,38 @@ class IOManagerWidget(QWidget):
 
     def update_table(self, xlsx_path):
         self.edit_mode = False
-        df = pd.read_excel(xlsx_path)
-        self.table.setRowCount(len(df))
-        self.table.setColumnCount(len(df.columns) + 1)
-        header_list = ["check"] + df.columns.tolist()
+        wb = load_workbook(xlsx_path)
+        ws = wb.active
+
+        headers = []
+        for cell in next(ws.iter_rows(min_row=1, max_row=1)):
+            headers.append(cell.value)
+        header_list = ["check"] + headers
+        self.table.setColumnCount(len(header_list))
+
+        data_rows = list(ws.iter_rows(min_row=2, values_only=False))
+        self.table.setRowCount(len(data_rows))
         self.table.setHorizontalHeaderLabels(header_list)
-        for row_idx, row_data in df.iterrows():
+
+        for row_idx, row_data in enumerate(data_rows):
             checkbox = QCheckBox()
-            checkbox.clicked.connect(lambda _, row = row_idx: on_checkbox_clicked(self, row, xlsx_path))
+            checkbox.clicked.connect(lambda _, row=row_idx: on_checkbox_clicked(self, row, xlsx_path))
             self.table.setCellWidget(row_idx, 0, checkbox)
 
-            for col_idx, header in enumerate(df.columns):
-                value = row_data[header]
-
-                # NaN 처리
-                if pd.isna(value):
+            for col_idx, cell in enumerate(row_data):
+                header = headers[col_idx]
+                value = cell.value
+                if value is None:
                     value = ""
 
-                # 썸네일 처리
                 if header == "thumbnail":
-                    value = row_data["thumbnail_path"]
                     self.set_thumbnail_cell(row_idx, col_idx + 1, value)
-                    #item = QTableWidgetItem(value)
-                    #self.table.setItem(row_idx, col_idx + 1, item)
                 else:
-                    item = QTableWidgetItem(str(value))
-                    self.table.setItem(row_idx, col_idx + 1, item)
+                    label = QLabel(str(value))
+                    self.table.setCellWidget(row_idx, col_idx + 1, label)
+                    # item = QTableWidgetItem(str(value))
+                    # self.table.setItem(row_idx, col_idx + 1, item)
+
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
 
     def set_thumbnail_cell(self, row, col, img_path):
@@ -199,7 +205,6 @@ class IOManagerWidget(QWidget):
             self.table.setCellWidget(row, col, label)
             self.table.setRowHeight(row, 230)
             self.table.setColumnWidth(col, 400)
-
     def on_select_excel_clicked(self):
         xlsx_file_path = select_xlsx_file(self.file_path_le)
         if xlsx_file_path:
