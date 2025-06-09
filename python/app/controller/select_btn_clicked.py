@@ -38,5 +38,3 @@ def select_date_directory(main_widget):
         return selected_date_path
     return None
 
-############################################################################
-# Model쪽으로 옮기고 다른 xlsx 만드는 코드(파이썬 파일)들하고 통합을 좀 하자

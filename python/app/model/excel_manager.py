@@ -176,6 +176,7 @@ class ExcelManager:
         all_keys_set -= set(default_fields)
 
         all_fields = default_fields + list(all_keys_set) # headers
+        print(all_fields)
         ws.append(all_fields)
 
         # Insert meta data to work sheet

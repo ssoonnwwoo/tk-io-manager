@@ -68,7 +68,7 @@ class AppDialog(QtGui.QWidget):
         #self._app = sgtk.platform.current_bundle()
 
         # logging happens via a standard toolkit logger
-        logger.info("Launching IO Manager...")
+        logger.info("Launching IO Manager Dev...")
 
         # via the self._app handle we can for example access:
         # - The engine, via self._app.engine

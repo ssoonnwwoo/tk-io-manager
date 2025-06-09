@@ -205,6 +205,7 @@ class IOManagerWidget(QWidget):
             self.table.setCellWidget(row, col, label)
             self.table.setRowHeight(row, 230)
             self.table.setColumnWidth(col, 400)
+
     def on_select_excel_clicked(self):
         xlsx_file_path = select_xlsx_file(self.file_path_le)
         if xlsx_file_path:
