@@ -8,10 +8,20 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-
-from sgtk.platform import Application
-from rez.resolved_context import ResolvedContext
+import sys
 import os
+from sgtk.platform import Application
+
+site_packages_path = "/home/rapa/my_rez/lib/python3.9/site-packages"
+if os.path.isdir(site_packages_path):
+    if site_packages_path not in sys.path:
+        sys.path.append(site_packages_path)
+
+try:
+    from rez.resolved_context import ResolvedContext
+except ImportError:
+    ResolvedContext = None
+
 class SgtkStarterApp(Application):
     """
     The app entry point. This class is responsible for initializing and tearing down
@@ -22,9 +32,12 @@ class SgtkStarterApp(Application):
         """
         Called as the application is being initialized
         """
-        rez_packages = ["oiio-3.0.6.1"]
-        context = ResolvedContext(rez_packages)
-        context.apply()
+        if ResolvedContext is None:
+            self.logger.warning("Rez not available. Skipping Rez context setup.")
+        else:
+            rez_packages = ["oiio-3.0.6.1"]
+            context = ResolvedContext(rez_packages)
+            context.apply()
 
         # first, we use the special import_module command to access the app module
         # that resides inside the python folder in the app. This is where the actual UI

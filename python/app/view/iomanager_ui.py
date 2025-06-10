@@ -9,19 +9,19 @@ for name, cls in QtGui.__dict__.items():
 from ..controller.select_btn_clicked import on_select_clicked
 from ..controller.table_checkbox_clicked import on_checkbox_clicked
 from ..controller.save_btn_clicked import on_save_clicked
+from ..controller.select_xl_btn_clicked import on_select_xl_clicked
+
 from ..model.excel_manager import ExcelManager
 
-from ..controller.io_event_handler import toggle_edit_mode, select_xlsx_file
-from ..model.table_to_metalist import save_table_to_xlsx
 from ..model.get_publish_info import get_publish_info
 from ..model.rename import rename_sequence
 from ..model.convert import exrs_to_jpgs, mov_to_exrs, exrs_to_video, exrs_to_montage, exrs_to_thumbnail
 import os
 import sgtk
 import sys
-import pandas as pd
 from openpyxl import load_workbook
 
+# Import resource binding python code
 resource_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources"))
 if resource_path not in sys.path:
     sys.path.append(resource_path)
@@ -62,15 +62,13 @@ class IOManagerWidget(QWidget):
         current_excel_label = QLabel("Currently displayed Excel file:")
         self.excel_label = QLabel("Ready to load")
         excel_save_btn = QPushButton("Version and Save")
-        self.excel_edit_btn = QPushButton("Enable Edit")
         select_excel_btn = QPushButton("Select Excel")
         publish_btn = QPushButton("Publish")
 
         # Event Handle
         shot_select_btn.clicked.connect(lambda : on_select_clicked(self))
-        self.excel_edit_btn.clicked.connect(self.on_edit_clicked)
         excel_save_btn.clicked.connect(lambda : on_save_clicked(self))
-        select_excel_btn.clicked.connect(self.on_select_excel_clicked)
+        select_excel_btn.clicked.connect(lambda : on_select_xl_clicked(self))
         publish_btn.clicked.connect(self.on_publish_clicked)
 
         # Layout
@@ -94,7 +92,6 @@ class IOManagerWidget(QWidget):
         excel_label_conatainer.addWidget(current_excel_label, alignment=Qt.AlignTop)
         excel_label_conatainer.addWidget(self.excel_label, alignment=Qt.AlignTop)
         excel_btn_layout.addWidget(excel_save_btn)
-        excel_btn_layout.addWidget(self.excel_edit_btn)
         excel_btn_layout2.addWidget(select_excel_btn)
         excel_container.addLayout(excel_btn_layout)
         excel_container.addLayout(excel_btn_layout2)
@@ -108,15 +105,15 @@ class IOManagerWidget(QWidget):
         main_layout.addLayout(bottom_layout)
 
         self.setLayout(main_layout)
-        self.edit_mode = False
 
 
 
     def _get_project_name(self):
         """
         Get the project name from engine & context that is currently running
-        arg: current engine ex) tk-desktop
-        return: project name
+
+        Returns: 
+            str: project name
         """
         context = self.current_engine.context
         project_name = context.project.get("name")
@@ -125,52 +122,32 @@ class IOManagerWidget(QWidget):
     def _get_shotgun_api(self):
         """
         Get Shotgun API from engine & sgtk
-        arg: current engine ex) tk-desktop
-        return: shotgun api
+
+        Returns: 
+            object: shotgun api
         """
         # Grab the already created Sgtk instance from the current engine.
         tk = self.current_engine.sgtk
         sg = tk.shotgun
         return sg
 
-    def on_edit_clicked(self):
-        self.edit_mode = toggle_edit_mode(self.table, self.edit_mode)
-        if self.edit_mode:
-            self.excel_edit_btn.setText("Disable Edit")
-        else:
-            self.excel_edit_btn.setText("Enable Edit")
-
-    def on_save_clicked2(self):
-        if not os.path.exists(self.file_path_le.text()):
-            return
-        xlsx_path = get_new_version_name(self.file_path_le.text())
-
-        reply = QMessageBox.question(
-            self,
-            "Confirm Save",
-            f"The file will be saved as\n{os.path.basename(xlsx_path)}\nDo you want to continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            save_table_to_xlsx(self.table, xlsx_path)
-            self.excel_label.setText(xlsx_path)
-            self.update_table(xlsx_path)
-            print(f"[COMPLETE] Version up file saved : {xlsx_path}")
-        else:
-            pass
-
     def update_table(self, xlsx_path):
-        self.edit_mode = False
+        """
+        Update table widget based on excel file
+
+        Args:
+            str: Path of reference excel file
+        """
         wb = load_workbook(xlsx_path)
         ws = wb.active
 
+        # Making headers : First row of xlsx file -> Header label of table widget 
         headers = []
         for cell in next(ws.iter_rows(min_row=1, max_row=1)):
             headers.append(cell.value)
         header_list = ["check"] + headers
-        self.table.setColumnCount(len(header_list))
 
+        self.table.setColumnCount(len(header_list))
         data_rows = list(ws.iter_rows(min_row=2, values_only=False))
         self.table.setRowCount(len(data_rows))
         self.table.setHorizontalHeaderLabels(header_list)
@@ -183,20 +160,25 @@ class IOManagerWidget(QWidget):
             for col_idx, cell in enumerate(row_data):
                 header = headers[col_idx]
                 value = cell.value
-                if value is None:
+                if value == None:
                     value = ""
 
                 if header == "thumbnail":
                     self.set_thumbnail_cell(row_idx, col_idx + 1, value)
                 else:
-                    label = QLabel(str(value))
-                    self.table.setCellWidget(row_idx, col_idx + 1, label)
-                    # item = QTableWidgetItem(str(value))
-                    # self.table.setItem(row_idx, col_idx + 1, item)
-
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+                    item = QTableWidgetItem(str(value))
+                    item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    self.table.setItem(row_idx, col_idx + 1, item)
 
     def set_thumbnail_cell(self, row, col, img_path):
+        """
+        Set thumbnail cell of table widget using QPixmap
+
+        Args:
+            row(int)
+            col(int)
+            img_path(str)
+        """
         label = QLabel()
         pixmap = QPixmap(img_path)
         if not pixmap.isNull():
@@ -205,12 +187,6 @@ class IOManagerWidget(QWidget):
             self.table.setCellWidget(row, col, label)
             self.table.setRowHeight(row, 230)
             self.table.setColumnWidth(col, 400)
-
-    def on_select_excel_clicked(self):
-        xlsx_file_path = select_xlsx_file(self.file_path_le)
-        if xlsx_file_path:
-            self.update_table(xlsx_file_path)
-            self.excel_label.setText(xlsx_file_path)
 
     def get_checked_rows(self):
         checked_rows = []
