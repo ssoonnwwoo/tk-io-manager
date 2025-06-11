@@ -87,7 +87,6 @@ class IOManagerWidget(QWidget):
         shot_select_container.addWidget(file_path_label)
         shot_select_container.addWidget(self.file_path_le)
         shot_select_container.addWidget(shot_select_btn)
-        #shot_select_container.addWidget(shot_load_btn)
         
         excel_label_conatainer.addWidget(current_excel_label, alignment=Qt.AlignTop)
         excel_label_conatainer.addWidget(self.excel_label, alignment=Qt.AlignTop)
@@ -188,6 +187,8 @@ class IOManagerWidget(QWidget):
             self.table.setRowHeight(row, 230)
             self.table.setColumnWidth(col, 400)
 
+
+###########################################################################################################################
     def get_checked_rows(self):
         checked_rows = []
         for row in range(self.table.rowCount()):
