@@ -9,11 +9,12 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import sgtk
-
-
-# by importing QT from sgtk rather than directly, we ensure that
-# the code will be compatible with both PySide and PyQt.
-from sgtk.platform.qt import QtCore, QtGui
+import os
+from openpyxl import load_workbook
+from .get_latest_xl import get_latest_xlsx
+from .xl_to_table import update_table
+from sgtk.platform.qt import QtGui
+from .model.excel_manager import ExcelManager
 from .view.iomanager_ui import IOManagerWidget
 
 # standard toolkit logger
@@ -24,12 +25,6 @@ def show_dialog(app_instance):
     """
     Shows the main dialog window.
     """
-    # in order to handle UIs seamlessly, each toolkit engine has methods for launching
-    # different types of windows. By using these methods, your windows will be correctly
-    # decorated and handled in a consistent fashion by the system.
-
-    # we pass the dialog class to this method and leave the actual construction
-    # to be carried out by toolkit.
     app_instance.engine.show_dialog("IO Manager", app_instance, AppDialog)
 
 
@@ -42,44 +37,123 @@ class AppDialog(QtGui.QWidget):
         """
         Constructor
         """
-        # first, call the base class and let it do its thing.
         QtGui.QWidget.__init__(self)
+        self.current_engine = sgtk.platform.current_engine()
+        self.sg = self.get_shotgun_api()
+        self.project_name = self.get_project_name()
+        self.home_path = os.path.expanduser("~")
+        self.project_path = os.path.join(self.home_path, "show", self.project_name)
+        self.default_path = os.path.join(self.project_path, "product", "scan")
+        # ex : default_path = {self.home_path}/show/{project_name}/product/scan
+        
+        # View
+        self.iomanager_ui = IOManagerWidget()
+        self.connect_event_handlers()
+        self.iomanager_ui.project_label.setText(self.project_name)
+        
+        # Model
+        self.xl_manager = ExcelManager()
 
-        # now load in the UI that was created in the UI designer
-        # self.ui = Ui_Dialog()
-        # self.ui.setupUi(self)
         layout = QtGui.QVBoxLayout()
-        self.io_widget = IOManagerWidget()
-        layout.addWidget(self.io_widget)
+        layout.addWidget(self.iomanager_ui)
         self.setLayout(layout)
         self.resize(1400, 800)
 
-        # self._app = sgtk.platform.current_bundle()
-        # context = self._app.context
-        # project_name = context.project.get("name")
-        # if project_name:
-        #     self.io_widget.project_cb.setCurrentText(project_name)
-        #     self.io_widget.on_project_selected(project_name)
 
-        # most of the useful accessors are available through the Application class instance
-        # it is often handy to keep a reference to this. You can get it via the following method:
-        #self._app = sgtk.platform.current_bundle()
-
-        # logging happens via a standard toolkit logger
         logger.info("Launching IO Manager Dev...")
 
-        # via the self._app handle we can for example access:
-        # - The engine, via self._app.engine
-        # - A Shotgun API instance, via self._app.shotgun
-        # - An Sgtk API instance, via self._app.sgtk
 
-        # lastly, set up our very basic UI
-        #self.ui.context.setText("Current Context: %s" % self._app.context)
-        #self.ui.context_user.setText("Current User: %s" % self._app.context.user['name'])
-        #self.ui.project_dir.setText("Project Dir: %s" % self._app.context.filesystem_locations)
+    def connect_event_handlers(self):
+        self.iomanager_ui.shot_select_btn.clicked.connect(self.on_select_clicked)
 
-        #context = self._app.context
-        #print("Project :", context.project)
-        #print("User    :", context.user['name'])
-        # print("Filesystem Locations:", context.filesystem_locations)
-        # print("Human-readable str :", str(context))
+    def on_select_clicked(self):
+        selected_date_path = self.select_date_directory()
+        if not selected_date_path:
+            return
+        self.xl_manager.set_date_path(selected_date_path)
+        self.iomanager_ui.file_path_le.setText(selected_date_path)
+        latest_xlsx_path = get_latest_xlsx(self)
+        self.xl_manager.set_xl_path(latest_xlsx_path)
+        update_table(self)
+        self.iomanager_ui.excel_label.setText(latest_xlsx_path)
+
+    def on_checkbox_clicked(self, row, xlsx_path):
+        wb = load_workbook(xlsx_path)
+        ws = wb.active
+
+        headers = [cell.value for cell in ws[1]]
+        seq_idx = headers.index("seq name")
+        shot_idx = headers.index("shot name")
+
+        excel_row = row + 2
+        seq = ws.cell(row=excel_row, column=seq_idx + 1).value
+        shot = ws.cell(row=excel_row, column=shot_idx + 1).value
+
+        if not seq or not shot or str(seq).strip() == "" or str(shot).strip() == "":
+            QtGui.QMessageBox.warning(
+                self.iomanager_ui,
+                "Missing Data",
+                f"Row[{row + 1}] missing 'seq name' or 'shot name'.\nThis row cannot be selected.",
+                QtGui.QMessageBox.Ok
+            )
+
+            checkbox = self.iomanager_ui.table.cellWidget(row, 0)
+            if isinstance(checkbox, QtGui.QCheckBox):
+                checkbox.setChecked(False)
+
+
+    def select_date_directory(self):
+        default_path = self.default_path
+        if not os.path.isdir(default_path):
+            default_path = self.project_path
+        
+        selected_date_path = QtGui.QFileDialog.getExistingDirectory(
+            self.iomanager_ui, # Parent Widget
+            "Select scan data folder",
+            default_path, 
+            QtGui.QFileDialog.ShowDirsOnly
+        )
+
+        # return date directory path
+        # ex) date directory path : /home/rapa/show/my_project/product/scan/250529
+        if selected_date_path:
+            if not selected_date_path.startswith(self.project_path):
+                QtGui.QMessageBox.warning(
+                    self.iomanager_ui, 
+                    "Warning", 
+                    f"'{selected_date_path}' Out of boundary : Not Selected Project"
+                )
+                return None
+            return selected_date_path
+        return None
+
+    def get_project_name(self):
+        """
+        Get the project name from engine & context that is currently running
+
+        Returns: 
+            str: project name
+        """
+        context = self.current_engine.context
+        project_name = context.project.get("name")
+        return project_name
+
+    def get_shotgun_api(self):
+        """
+        Get Shotgun API from engine & sgtk
+
+        Returns: 
+            object: shotgun api
+        """
+        # Grab the already created Sgtk instance from the current engine.
+        tk = self.current_engine.sgtk
+        sg = tk.shotgun
+        return sg
+    
+    def show_error_dialog(self, message):
+        QtGui.QMessageBox.warning(
+            self.iomanager,
+            "Error",
+            message,
+            QtGui.QMessageBox.Ok
+        )
