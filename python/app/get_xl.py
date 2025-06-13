@@ -6,6 +6,7 @@ import os
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
 from openpyxl.utils import get_column_letter
+from sgtk.platform.qt import QtGui
 
 def get_latest_xlsx(app_instance):
     """
@@ -170,7 +171,7 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
     ws = wb.active
     ws.title = "Metadata"
 
-    default_fields = ["thumbnail", "shot name", "seq name", "scan name"]
+    default_fields = ["check", "thumbnail", "shot name", "seq name", "scan name"]
     all_keys_set = set()
     for meta_data in meta_data_list:
         for key in meta_data.keys():
@@ -200,6 +201,14 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
             img.width = 192
             img.height = 108
             ws.add_image(img, cell_ref)
+        
+        # Handle check col
+        checked = meta_data.get("check", 0)
+        #print(f"row: {row_idx}, checked: {checked}")
+        col_letter = get_column_letter(all_fields.index("check") + 1)
+        cell_ref = f"{col_letter}{row_idx}"
+        ws[cell_ref] = checked
+        
     xl_path = os.path.join(date_directory_path, xl_name)
     wb.save(xl_path)
 
@@ -258,24 +267,31 @@ def table_to_meta_list(app_instance):
     column_count = table.columnCount()
     row_count = table.rowCount()
 
-    headers = [table.horizontalHeaderItem(col).text() for col in range(1, column_count)]
+    headers = [table.horizontalHeaderItem(col).text() for col in range(column_count)]
+    print(f"headers: {headers}")
     meta_list = []
 
     for row in range(row_count):
         row_dict = {}
-        for col in range(1, column_count):
+        for col in range(column_count):
             item = table.item(row, col)
             if item:
                 text_value = item.text()
-            # Handle QPixmap
+            # Handle QPixmap, CheckBox
             else:
                 cell_widget = table.cellWidget(row, col)
-                if cell_widget:
-                    text_value = cell_widget.text()
+                if isinstance(cell_widget, QtGui.QCheckBox):
+                    if cell_widget.isChecked():
+                        print(f"checked, row: {row}, col: {col}")
+                        text_value = 1
+                    else:
+                        print(f"unchecked, row: {row}, col: {col}")
+                        text_value = 0
                 else:
+                    print(f"row: {row}, col: {col}")
                     text_value = ""
-            row_dict[headers[col - 1]] = text_value
-
+            row_dict[headers[col]] = text_value
+        print(row_dict)
         meta_list.append(row_dict)
     return meta_list
 
