@@ -10,8 +10,7 @@
 
 import sgtk
 import os
-from openpyxl import load_workbook
-from .get_latest_xl import get_latest_xlsx
+from .get_xl import get_latest_xlsx, get_new_xlsx, save_table_to_xlsx
 from .xl_to_table import update_table
 from sgtk.platform.qt import QtGui
 from .model.excel_manager import ExcelManager
@@ -26,7 +25,6 @@ def show_dialog(app_instance):
     Shows the main dialog window.
     """
     app_instance.engine.show_dialog("IO Manager", app_instance, AppDialog)
-
 
 class AppDialog(QtGui.QWidget):
     """
@@ -64,9 +62,11 @@ class AppDialog(QtGui.QWidget):
 
 
     def connect_event_handlers(self):
-        self.iomanager_ui.shot_select_btn.clicked.connect(self.on_select_clicked)
+        self.iomanager_ui.shot_select_btn.clicked.connect(self.on_select_btn_clicked)
+        self.iomanager_ui.excel_save_btn.clicked.connect(self.on_save_btn_click)
+        self.iomanager_ui.select_excel_btn.clicked.connect(self.on_select_xl_btn_clicked)
 
-    def on_select_clicked(self):
+    def on_select_btn_clicked(self):
         selected_date_path = self.select_date_directory()
         if not selected_date_path:
             return
@@ -77,29 +77,53 @@ class AppDialog(QtGui.QWidget):
         update_table(self)
         self.iomanager_ui.excel_label.setText(latest_xlsx_path)
 
-    def on_checkbox_clicked(self, row, xlsx_path):
-        wb = load_workbook(xlsx_path)
-        ws = wb.active
+    def on_save_btn_click(self):
+        new_xl_path = get_new_xlsx(self)
+        if not new_xl_path:
+            return
+        
+        reply = QtGui.QMessageBox.question(
+            self.iomanager_ui,
+            "Confirm save",
+            f"The file will be saved as\n{os.path.basename(new_xl_path)}\nDo you wand to continue?",
+            QtGui.QMessageBox.StandardButton.Yes | QtGui.QMessageBox.StandardButton.No
+        )
 
-        headers = [cell.value for cell in ws[1]]
-        seq_idx = headers.index("seq name")
-        shot_idx = headers.index("shot name")
+        if reply == QtGui.QMessageBox.StandardButton.Yes:
+            save_table_to_xlsx(self, new_xl_path)
+            self.xl_manager.set_xl_path(new_xl_path)
+            update_table(self)
+            self.iomanager_ui.excel_label.setText(new_xl_path)
+            logger.info(f"Excel file version up and saved {new_xl_path}")
+        else:
+            return
 
-        excel_row = row + 2
-        seq = ws.cell(row=excel_row, column=seq_idx + 1).value
-        shot = ws.cell(row=excel_row, column=shot_idx + 1).value
+    def on_select_xl_btn_clicked(self):
+        date_directory_path = self.xl_manager.get_date_path()
+        if not os.path.isdir(date_directory_path):
+            return
+        
+        xl_file_path, _ = QtGui.QFileDialog.getOpenFileName(
+            self.iomanager_ui,
+            "Select XLSX file",
+            date_directory_path,
+            "XLSX files (*.xlsx)"
+        )
 
-        if not seq or not shot or str(seq).strip() == "" or str(shot).strip() == "":
+        if not xl_file_path:
+            return
+        
+        if not xl_file_path.startswith(self.project_path):
             QtGui.QMessageBox.warning(
-                self.iomanager_ui,
-                "Missing Data",
-                f"Row[{row + 1}] missing 'seq name' or 'shot name'.\nThis row cannot be selected.",
-                QtGui.QMessageBox.Ok
-            )
-
-            checkbox = self.iomanager_ui.table.cellWidget(row, 0)
-            if isinstance(checkbox, QtGui.QCheckBox):
-                checkbox.setChecked(False)
+                    self.iomanager_ui, 
+                    "Warning", 
+                    f"'{xl_file_path}' Out of boundary : Not Selected Project"
+                )
+            return
+        
+        self.xl_manager.set_xl_path(xl_file_path)
+        update_table(self)
+        self.iomanager_ui.excel_label.setText(xl_file_path)
 
 
     def select_date_directory(self):
@@ -152,7 +176,7 @@ class AppDialog(QtGui.QWidget):
     
     def show_error_dialog(self, message):
         QtGui.QMessageBox.warning(
-            self.iomanager,
+            self.iomanager_ui,
             "Error",
             message,
             QtGui.QMessageBox.Ok

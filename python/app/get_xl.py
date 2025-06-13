@@ -200,8 +200,82 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
             img.width = 192
             img.height = 108
             ws.add_image(img, cell_ref)
-    xl_path = os.path.join(app_instance.date_directory_path, xl_name)
+    xl_path = os.path.join(date_directory_path, xl_name)
     wb.save(xl_path)
 
     print(f"[COMPLETE] Metadata exported to:\n{xl_path}")
     return xl_path
+
+def get_new_xlsx(app_instance):
+    """
+    Get (latest_version + 1) xlsx file path
+
+    Returns:
+        str: new xlsx file path
+    """
+    date_directory_path = app_instance.xl_manager.get_date_path()
+    versioned_files = get_xl_files(app_instance, date_directory_path)
+    # No selected date path 
+    if not versioned_files:
+        new_version_xl = ""
+        return new_version_xl
+    latest_version_tuple = max(versioned_files)
+    next_version = latest_version_tuple[0] + 1
+    date_dir_name = os.path.basename(date_directory_path)
+    file_name = f"{date_dir_name}_list_v{next_version:03d}.xlsx"
+    new_version_xl = os.path.join(date_directory_path, file_name)
+    return new_version_xl
+
+def save_table_to_xlsx(app_instance, save_path):
+    """
+    Save table widget as xlsx
+    Table -> dictionary list -> xlsx
+
+    Returns:
+        str : Path of saved excel file
+    """
+    date_directory_path = app_instance.xl_manager.get_date_path()
+    meta_list = table_to_meta_list(app_instance)        
+    for meta in meta_list:
+        scan_name = meta.get("scan name")
+        if scan_name:
+            thumb_path = os.path.join(date_directory_path, "thumbnails", scan_name + ".jpg")
+            if os.path.exists(thumb_path):
+                meta["thumbnail"] = thumb_path
+            else:
+                meta["thumbnail"] = ""
+
+    save_list_as_xlsx(app_instance, meta_list, date_directory_path, save_path)
+
+def table_to_meta_list(app_instance):
+    """
+    Convert table widget into list of dictionary for save as xlsx
+    
+    Returns:
+        list: List of meta data dictionary
+    """
+    table = app_instance.iomanager_ui.table
+    column_count = table.columnCount()
+    row_count = table.rowCount()
+
+    headers = [table.horizontalHeaderItem(col).text() for col in range(1, column_count)]
+    meta_list = []
+
+    for row in range(row_count):
+        row_dict = {}
+        for col in range(1, column_count):
+            item = table.item(row, col)
+            if item:
+                text_value = item.text()
+            # Handle QPixmap
+            else:
+                cell_widget = table.cellWidget(row, col)
+                if cell_widget:
+                    text_value = cell_widget.text()
+                else:
+                    text_value = ""
+            row_dict[headers[col - 1]] = text_value
+
+        meta_list.append(row_dict)
+    return meta_list
+

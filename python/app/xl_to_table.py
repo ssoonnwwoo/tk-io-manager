@@ -25,7 +25,7 @@ def update_table(app_instance):
 
     for row_idx, row_data in enumerate(data_rows):
         checkbox = QtGui.QCheckBox()
-        checkbox.clicked.connect(lambda _, row=row_idx: app_instance.on_checkbox_clicked(row, xlsx_path))
+        checkbox.clicked.connect(lambda _, row=row_idx: on_checkbox_clicked(app_instance, row, xlsx_path))
         app_instance.iomanager_ui.table.setCellWidget(row_idx, 0, checkbox)
 
         for col_idx, cell in enumerate(row_data):
@@ -40,6 +40,31 @@ def update_table(app_instance):
                 item = QtGui.QTableWidgetItem(str(value))
                 item.setFlags(item.flags() | QtGui.Qt.ItemIsEditable)
                 app_instance.iomanager_ui.table.setItem(row_idx, col_idx + 1, item)
+
+# 수정 예정
+def on_checkbox_clicked(app_instance, row, xlsx_path):
+    wb = load_workbook(xlsx_path)
+    ws = wb.active
+
+    headers = [cell.value for cell in ws[1]]
+    seq_idx = headers.index("seq name")
+    shot_idx = headers.index("shot name")
+
+    excel_row = row + 2
+    seq = ws.cell(row=excel_row, column=seq_idx + 1).value
+    shot = ws.cell(row=excel_row, column=shot_idx + 1).value
+
+    if not seq or not shot or str(seq).strip() == "" or str(shot).strip() == "":
+        QtGui.QMessageBox.warning(
+            app_instance.iomanager_ui,
+            "Missing Data",
+            f"Row[{row + 1}] missing 'seq name' or 'shot name'.\nThis row cannot be selected.",
+            QtGui.QMessageBox.Ok
+        )
+
+        checkbox = app_instance.iomanager_ui.table.cellWidget(row, 0)
+        if isinstance(checkbox, QtGui.QCheckBox):
+            checkbox.setChecked(False)
 
 def set_thumbnail_cell(app_instance, row, col, img_path):
     """
