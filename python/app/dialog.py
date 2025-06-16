@@ -12,6 +12,7 @@ import sgtk
 import os
 from .get_xl import get_latest_xlsx, get_new_xlsx, save_table_to_xlsx
 from .xl_to_table import update_table
+from .sg_upload import get_publish_list
 from sgtk.platform.qt import QtGui
 from .model.excel_manager import ExcelManager
 from .view.iomanager_ui import IOManagerWidget
@@ -65,6 +66,7 @@ class AppDialog(QtGui.QWidget):
         self.iomanager_ui.shot_select_btn.clicked.connect(self.on_select_btn_clicked)
         self.iomanager_ui.excel_save_btn.clicked.connect(self.on_save_btn_click)
         self.iomanager_ui.select_excel_btn.clicked.connect(self.on_select_xl_btn_clicked)
+        self.iomanager_ui.publish_btn.clicked.connect(self.on_publish_btn_clicked)
 
     def on_select_btn_clicked(self):
         selected_date_path = self.select_date_directory()
@@ -124,6 +126,32 @@ class AppDialog(QtGui.QWidget):
         self.xl_manager.set_xl_path(xl_file_path)
         update_table(self)
         self.iomanager_ui.excel_label.setText(xl_file_path)
+
+    def on_publish_btn_clicked(self):
+        xl_path = self.xl_manager.get_xl_path()
+        if xl_path == "":
+            self.show_error_dialog("Error: No selected excel file for publish")
+            return
+        
+        publish_list = get_publish_list(self, xl_path)
+        #[{'seq': 'S001', 'shot': 'S001_0010', 'version': 'v001', 'directory': '/home/rapa/show/Vamos/product/scan/20250530_test/002_A206C024_240315_R29Q'}]
+
+        for shot_info in publish_list:
+            seq = shot_info["seq"]
+            shot = shot_info["shot"]
+            ver = shot_info["version"]
+            scan_dir_path = shot_info["directory"]
+
+            plate_dir_path = os.path.join(self.project_path, "seq", seq, shot, "plate")
+            org_path = os.path.join(plate_dir_path, "org", ver)
+            sg_path = os.path.join(plate_dir_path, "shotgrid_upload_datas", ver)
+            jpg_path = org_path+"_jpg"
+
+            os.makedirs(org_path, exist_ok=True)
+            os.makedirs(jpg_path, exist_ok=True)
+            os.makedirs(sg_path, exist_ok=True)
+
+            # seq, shot, ver, scandir, org path, sg path, jpg path
 
 
     def select_date_directory(self):

@@ -268,7 +268,6 @@ def table_to_meta_list(app_instance):
     row_count = table.rowCount()
 
     headers = [table.horizontalHeaderItem(col).text() for col in range(column_count)]
-    print(f"headers: {headers}")
     meta_list = []
 
     for row in range(row_count):
@@ -282,16 +281,12 @@ def table_to_meta_list(app_instance):
                 cell_widget = table.cellWidget(row, col)
                 if isinstance(cell_widget, QtGui.QCheckBox):
                     if cell_widget.isChecked():
-                        print(f"checked, row: {row}, col: {col}")
                         text_value = 1
                     else:
-                        print(f"unchecked, row: {row}, col: {col}")
                         text_value = 0
                 else:
-                    print(f"row: {row}, col: {col}")
                     text_value = ""
             row_dict[headers[col]] = text_value
-        print(row_dict)
         meta_list.append(row_dict)
     return meta_list
 
