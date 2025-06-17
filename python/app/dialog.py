@@ -16,6 +16,8 @@ from .sg_upload import get_publish_list
 from sgtk.platform.qt import QtGui
 from .model.excel_manager import ExcelManager
 from .view.iomanager_ui import IOManagerWidget
+from .shot_converter import ShotConverter
+
 
 # standard toolkit logger
 logger = sgtk.platform.get_logger(__name__)
@@ -58,6 +60,7 @@ class AppDialog(QtGui.QWidget):
         self.setLayout(layout)
         self.resize(1400, 800)
 
+        self.shot_converter = ShotConverter()
 
         logger.info("Launching IO Manager Dev...")
 
@@ -130,6 +133,7 @@ class AppDialog(QtGui.QWidget):
     def on_publish_btn_clicked(self):
         xl_path = self.xl_manager.get_xl_path()
         if xl_path == "":
+            logger.error("No selected excel file for publish")
             self.show_error_dialog("Error: No selected excel file for publish")
             return
         
@@ -140,19 +144,27 @@ class AppDialog(QtGui.QWidget):
             seq = shot_info["seq"]
             shot = shot_info["shot"]
             ver = shot_info["version"]
-            scan_dir_path = shot_info["directory"]
-
+            scandata_path = shot_info["directory"]
             plate_dir_path = os.path.join(self.project_path, "seq", seq, shot, "plate")
             org_path = os.path.join(plate_dir_path, "org", ver)
             sg_path = os.path.join(plate_dir_path, "shotgrid_upload_datas", ver)
-            jpg_path = org_path+"_jpg"
 
-            os.makedirs(org_path, exist_ok=True)
-            os.makedirs(jpg_path, exist_ok=True)
-            os.makedirs(sg_path, exist_ok=True)
+            self.shot_converter.set_paths(scandata_path, org_path, sg_path)
+            ext = self.shot_converter.get_ext()
 
-            # seq, shot, ver, scandir, org path, sg path, jpg path
+            if ext == ".exr":
+                result = self.shot_converter.rename_scandata()
+                if not result: return
+                jpgs_path = self.shot_converter.exrs_to_jpgs()
+                mp4_path = self.shot_converter.jpgs_to_video(vformat='mp4')
+                webm_path = self.shot_converter.jpgs_to_video(vformat='webm')
+                filmstrip_path = self.shot_converter.jpgs_to_montage()
+                self.shot_converter.jpgs_to_thumbnail()
 
+            elif ext == ".mov":
+                pass
+
+            
 
     def select_date_directory(self):
         default_path = self.default_path
