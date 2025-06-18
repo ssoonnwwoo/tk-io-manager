@@ -12,10 +12,10 @@ import sgtk
 import os
 from .get_xl import get_latest_xlsx, get_new_xlsx, save_table_to_xlsx
 from .xl_to_table import update_table
-from .sg_upload import get_publish_list
+from .sg_upload import get_publish_list, upload_shotgrid
 from sgtk.platform.qt import QtGui
-from .model.excel_manager import ExcelManager
-from .view.iomanager_ui import IOManagerWidget
+from .excel_manager import ExcelManager
+from .ui.iomanager_ui import IOManagerWidget
 from .shot_converter import ShotConverter
 
 
@@ -139,7 +139,7 @@ class AppDialog(QtGui.QWidget):
         
         publish_list = get_publish_list(self, xl_path)
         #[{'seq': 'S001', 'shot': 'S001_0010', 'version': 'v001', 'directory': '/home/rapa/show/Vamos/product/scan/20250530_test/002_A206C024_240315_R29Q'}]
-
+        shot_success = 0
         for shot_info in publish_list:
             seq = shot_info["seq"]
             shot = shot_info["shot"]
@@ -155,16 +155,23 @@ class AppDialog(QtGui.QWidget):
             if ext == ".exr":
                 result = self.shot_converter.rename_scandata()
                 if not result: return
+                # Convert
                 jpgs_path = self.shot_converter.exrs_to_jpgs()
                 mp4_path = self.shot_converter.jpgs_to_video(vformat='mp4')
                 webm_path = self.shot_converter.jpgs_to_video(vformat='webm')
                 filmstrip_path = self.shot_converter.jpgs_to_montage()
-                self.shot_converter.jpgs_to_thumbnail()
+                thumbnail_path = self.shot_converter.jpgs_to_thumbnail()
+                # Upload
+                paths = [mp4_path, webm_path, filmstrip_path, thumbnail_path]
+                upload_result = upload_shotgrid(self, paths, seq, shot, ver)
+                if upload_result: 
+                    shot_success += 1
+                else: return
 
             elif ext == ".mov":
                 pass
 
-            
+        self.show_info_dialog(f"Publish completed {shot_success}/{len(publish_list)}")
 
     def select_date_directory(self):
         default_path = self.default_path
@@ -182,11 +189,7 @@ class AppDialog(QtGui.QWidget):
         # ex) date directory path : /home/rapa/show/my_project/product/scan/250529
         if selected_date_path:
             if not selected_date_path.startswith(self.project_path):
-                QtGui.QMessageBox.warning(
-                    self.iomanager_ui, 
-                    "Warning", 
-                    f"'{selected_date_path}' Out of boundary : Not Selected Project"
-                )
+                self.show_error_dialog(f"'{selected_date_path}' Out of boundary : Not Selected Project")
                 return None
             return selected_date_path
         return None
@@ -218,6 +221,14 @@ class AppDialog(QtGui.QWidget):
         QtGui.QMessageBox.warning(
             self.iomanager_ui,
             "Error",
+            message,
+            QtGui.QMessageBox.Ok
+        )
+
+    def show_info_dialog(self, message):
+        QtGui.QMessageBox.information(
+            self.iomanager_ui,
+            "Info",
             message,
             QtGui.QMessageBox.Ok
         )

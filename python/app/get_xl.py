@@ -7,7 +7,8 @@ from openpyxl import Workbook
 from openpyxl.drawing.image import Image
 from openpyxl.utils import get_column_letter
 from sgtk.platform.qt import QtGui
-
+import sgtk
+logger = sgtk.platform.get_logger(__name__)
 def get_latest_xlsx(app_instance):
     """
     Get path of latest version excel file in selected directory.
@@ -68,20 +69,6 @@ def export_metadata(app_instance, date_path):
                     print(f"[SKIP] Thumbnail already exist: {thumb_path}")
             # MOV 폴더의 첫 프레임 thumbnial(JPG) 추출
             elif ext == ".mov":
-                # mov를 shot 단위의 exr로 만들고 이후 과정은 똑같이
-                # mov_path = os.path.join(root, seq.name)
-                # scan_data_path = mov_path # for export meta data
-                # thumb_name = os.path.splitext(seq.name)[0] + ".jpg"
-                # thumb_path = os.path.join(thumbnails_dir, thumb_name)
-                # if not os.path.exists(thumb_path):
-                #     if mov_to_jpg(scan_data_path, thumb_path):
-                #         print(f"[OK] Thumbnail created: {thumb_path}")
-                #     else:
-                #         print(f"[FAIL] Thumbnail create failed: {scan_data_path}")
-                #         thumb_path = ""
-
-                # else:
-                #     print(f"[SKIP] Thumbnail already exist: {thumb_path}")
                 continue
             else:
                 print(f"[SKIP] {seq} is not EXR OR MOV")
@@ -161,6 +148,7 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
     """
     if not meta_data_list:
         error_msg = f"No shot for exporting excel file"
+        logger.error(error_msg)
         app_instance.show_error_dialog(error_msg)
         return None
 
@@ -204,15 +192,15 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
         
         # Handle check col
         checked = meta_data.get("check", 0)
-        #print(f"row: {row_idx}, checked: {checked}")
         col_letter = get_column_letter(all_fields.index("check") + 1)
         cell_ref = f"{col_letter}{row_idx}"
         ws[cell_ref] = checked
-        
+    
     xl_path = os.path.join(date_directory_path, xl_name)
     wb.save(xl_path)
 
-    print(f"[COMPLETE] Metadata exported to:\n{xl_path}")
+    print(f"Metadata exported to:\n{xl_path}")
+    logger.info(f"Metadata exported to:\n{xl_path}")
     return xl_path
 
 def get_new_xlsx(app_instance):
