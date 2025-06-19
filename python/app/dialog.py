@@ -138,31 +138,23 @@ class AppDialog(QtGui.QWidget):
             return
         
         publish_list = get_publish_list(self, xl_path)
-        #[{'seq': 'S001', 'shot': 'S001_0010', 'version': 'v001', 'directory': '/home/rapa/show/Vamos/product/scan/20250530_test/002_A206C024_240315_R29Q'}]
         shot_success = 0
         for shot_info in publish_list:
             seq = shot_info["seq"]
             shot = shot_info["shot"]
+            fps = shot_info["fps"]
             ver = shot_info["version"]
             scandata_path = shot_info["directory"]
             plate_dir_path = os.path.join(self.project_path, "seq", seq, shot, "plate")
             org_path = os.path.join(plate_dir_path, "org", ver)
             sg_path = os.path.join(plate_dir_path, "shotgrid_upload_datas", ver)
 
-            self.shot_converter.set_paths(scandata_path, org_path, sg_path)
+            self.shot_converter.set_paths(scandata_path, org_path, sg_path, fps)
             ext = self.shot_converter.get_ext()
 
             if ext == ".exr":
-                result = self.shot_converter.rename_scandata()
-                if not result: return
-                # Convert
-                jpgs_path = self.shot_converter.exrs_to_jpgs()
-                mp4_path = self.shot_converter.jpgs_to_video(vformat='mp4')
-                webm_path = self.shot_converter.jpgs_to_video(vformat='webm')
-                filmstrip_path = self.shot_converter.jpgs_to_montage()
-                thumbnail_path = self.shot_converter.jpgs_to_thumbnail()
-                # Upload
-                paths = [mp4_path, webm_path, filmstrip_path, thumbnail_path]
+                paths = self.shot_converter.make_sg_datas()
+                #Upload
                 upload_result = upload_shotgrid(self, paths, seq, shot, ver)
                 if upload_result: 
                     shot_success += 1

@@ -13,6 +13,7 @@ class ShotConverter:
         self.org_path = ""
         self.sg_path = ""
         self.jpg_path = ""
+        self.fps = 0.0
     
     def set_scandata_path(self, scandata_path):
         self.scandata_path = scandata_path
@@ -27,16 +28,79 @@ class ShotConverter:
         self.sg_path = sg_path
         os.makedirs(self.sg_path, exist_ok=True)
 
-    def set_paths(self, scandata_path, org_path, sg_path):
+    def set_fps(self, fps):
+        self.fps = fps
+
+    def set_paths(self, scandata_path, org_path, sg_path, fps):
         self.set_scandata_path(scandata_path)
         self.set_org_path(org_path)
         self.set_sg_path(sg_path)
+        self.set_fps(fps)
+    
 
     def get_ext(self):
         for root, dirs, seqs in pyseq.walk(self.scandata_path):
             ext = seqs[0].tail()
             return ext
-    
+        
+    def make_sg_datas(self):
+        paths = [self.scandata_path, self.org_path, self.jpg_path, self.sg_path]
+        if not self.validate_paths(paths):
+            return False
+        
+        _, _, seqs = next(pyseq.walk(self.scandata_path))
+        seq = seqs[0]
+        result = self._process_start(seq)
+        return result
+
+    def _process_start(self, seq):
+        """"
+        Rename & Copy ->
+        EXRs to JPGs ->
+        JPGs to Video ->
+        make thumbnail & montage
+        """
+        scandata_name = seq.head().strip(".")
+        scandata_length = seq.length()
+        # Rename & Copy
+        file_base = self.make_file_name(self.org_path, "org") # S001_0010_org_v001
+        start_frame = 1001
+        copied_count = 0
+        org_files = []
+        for frame in seq:
+            new_name = f"{file_base}.{str(start_frame)}.{seq.tail()}" # S001_0010_org_v001.1001.exr
+            dst_path = os.path.join(self.org_path, new_name)
+            shutil.copyfile(frame.path, dst_path)
+            org_files.append(dst_path)
+            start_frame += 1
+            copied_count += 1
+        print(f"{scandata_name} rename to {file_base}\nTotal {copied_count}/{scandata_length} frames are rename & moved")
+        
+        # EXRs to JPGs
+        jpg_paths = []
+        renamed_seq_length = len(org_files)
+        converted_count = 0
+        for exr_path in org_files:
+            base = os.path.splitext(os.path.basename(exr_path))[0]
+            jpg_name = base + "jpg" # S001_0010_org_v001.1001.jpg
+            jpg_path = os.path.join(self.jpg_path, jpg_name)
+            if self.exr_to_jpg(exr_path, jpg_path):
+                jpg_paths.append(jpg_path)
+                converted_count += 1 
+                print(f"{converted_count}/{renamed_seq_length} EXR frames successfully converted to JPG")
+            else:
+                logger.error(f"Error occurred while coverting exrs to jpgs")
+                result_paths = {"mp4" : None, "webm" : None, "montage" : None, "thumbnail" : None}
+                return result_paths
+        
+        mp4 = self._jpgs_to_video(jpg_paths, vformat="mp4")
+        webm = self._jpgs_to_video(jpg_paths, vformat="webm")
+        montage = self._jpgs_to_montage(jpg_paths)
+        thumbnail = self._jpgs_to_thumbnail(jpg_paths)
+
+        result_paths = {"mp4" : mp4, "webm" : webm, "montage" : montage, "thumbnail" : thumbnail}
+        return result_paths
+
     def validate_paths(self, paths):
         validate_result = True
         for path in paths:
@@ -46,58 +110,22 @@ class ShotConverter:
                 return validate_result
         return validate_result
 
-    def rename_scandata(self):
-        paths = [self.scandata_path, self.org_path]
-        validate_paths_result = self.validate_paths(paths)
-        if not validate_paths_result:
-            return False
-
-        file_name = self.make_file_name(self.org_path, "org")
-        for root, dirs, seqs in pyseq.walk(self.scandata_path):
-            for seq in seqs:
-                converted_count = 0
-                ext = seq.tail()
-                scandata_name = seq.head().strip(".")
-                for frame in seq:
-                    if ext == ".exr":
-                        frame_num = frame.frame
-                        new_name = f"{file_name}.{frame_num}{ext}"
-                    old_path = frame.path
-                    new_file_path = os.path.join(self.org_path, new_name)
-                    shutil.copyfile(old_path, new_file_path)
-                    converted_count += 1
-                print(f"{scandata_name} rename to {file_name}\nTotal {converted_count} frames are rename & moved")
-        return True
-
     def make_file_name(self, new_path, typ):
+        """
+        Make new file name from org path or jpg path
+        
+        Args:
+            new_path (str): org path or jpg path(.../seq/S001/S001_0010/plate/org/v001)
+            typ (str): org, plate, ...
+        
+        Returns:
+            file_name (str): new file name (S001_0010_org_v001)
+        """
         parts = new_path.strip("/").split("/")
         seq_shot = parts[-4]  # "S038_0020"
         ver = parts[-1]       # "v001"
         file_name = f"{seq_shot}_{typ}_{ver}"
         return file_name
-
-    def exrs_to_jpgs(self):
-        for root, dirs, seqs in pyseq.walk(self.org_path):
-            for seq in seqs:
-                length = seq.length()
-                converted_count = 0
-                for frame in seq:
-                    exr_path = frame.path
-                    base_name = os.path.splitext(os.path.basename(exr_path))[0]
-                    # S001_0010_org_v003.894887
-                    jpg_file_name = base_name + ".jpg"
-                    jpg_file_path = os.path.join(self.jpg_path, jpg_file_name)
-
-                    success = self.exr_to_jpg(exr_path, jpg_file_path)
-                    if success: 
-                        converted_count += 1
-                        print(f"{converted_count}/{length} EXR frames successfully converted to JPG")
-                    else:
-                        logger.error(f"Error occurred while coverting exrs to jpgs")
-                        print(f"Convert stopped")
-                        return False
-                print(f"{converted_count} frames converting finished ({int(converted_count/length*100)}%)")
-        return self.jpg_path
 
     def exr_to_jpg(self, input_exr_path, output_jpg_path):
         if not os.path.isfile(input_exr_path):
@@ -116,113 +144,102 @@ class ShotConverter:
             return False
         return True
 
-    def jpgs_to_video(self, vformat='mp4'):
-        src_dir = self.jpg_path
-        dest_dir = self.sg_path
+    def _jpgs_to_video(self, jpg_paths, vformat='mp4'):
+        first = jpg_paths[0]
+        dirname, fname = os.path.split(first) 
+        base, _ = os.path.splitext(fname) # "S038_0020_org_v003.1001"
+        prefix, num = base.rsplit('.', 1) # prefix="S038_0020_org_v003", num="1001"
+        start_frame = int(num)
+        input_pattern = os.path.join(dirname, f"{prefix}.%d.jpg")
+        fps = f"{self.fps:.3f}"
+        output_name = self.make_file_name(self.sg_path, 'plate') + f".{vformat}"
+        output_path = os.path.join(self.sg_path, output_name)
+        if vformat == "mp4":
+            codec = "libx264"
+            pix_fmt = "yuv420p"
+        elif vformat == "webm":
+            codec = "libvpx"
+            pix_fmt = "yuv420p"
+        else:
+            logger.error(f"Unsupported format: {vformat}")
+            return False
 
-        for root, dirs, seqs in pyseq.walk(src_dir):
-            for seq in seqs:
-                start_frame = seq.start()
-                padding_str = seq.format('%p')
-                input_pattern = os.path.join(src_dir, f"{seq.head()}{padding_str}{seq.tail()}")
-                new_filename = self.make_file_name(dest_dir, "plate")
-                output_path = os.path.join(dest_dir, f"{new_filename}.{vformat}")
-                
-                if vformat == "mp4":
-                    codec = "libx264"
-                    pix_fmt = "yuv420p"
-                elif vformat == "webm":
-                    codec = "libvpx"
-                    pix_fmt = "yuv420p"
-                else:
-                    logger.error(f"Unsupported format: {vformat}")
-                    return False
+        cmd = [
+            "ffmpeg",
+            "-loglevel", "error",           
+            "-y",
+            "-start_number", str(start_frame),
+            "-framerate", fps,
+            "-i", input_pattern,
+            "-c:v", codec,
+            "-crf", "23",
+            "-pix_fmt", pix_fmt,
+            output_path,
+        ]
 
-                cmd = [
-                    "ffmpeg",
-                    "-loglevel", "error",           
-                    "-y",
-                    "-start_number", str(start_frame),
-                    "-framerate", "23.976",
-                    "-i", input_pattern,
-                    "-c:v", codec,
-                    "-crf", "23",
-                    "-pix_fmt", pix_fmt,
-                    output_path,
-                ]
-
-                result = subprocess.run(cmd)
-                if result.returncode != 0:
-                    logger.error(f"{vformat.upper()} created failed: {new_filename}")
-            print(f"{vformat.upper()} successfully created: {new_filename}")
+        result = subprocess.run(cmd)
+        if result.returncode != 0:
+            logger.error(f"{vformat.upper()} created failed: {output_name}")
+            return False
+        
+        print(f"{vformat.upper()} successfully created: {output_name}")
         return output_path
+    
+    def _jpgs_to_montage(self, jpg_paths):
+        first = jpg_paths[0]
+        jpg_dir = os.path.dirname(first)
+        fname = os.path.basename(first) 
+        base, ext = os.path.splitext(fname) # base: "S038_0020_org_v003.1001", ext: ".jpg"
+        prefix, num = base.rsplit('.', 1) # prefix: "S038_0020_org_v003", num: "1001"
+        start_frame = int(num)
 
-    def jpgs_to_montage(self):
-        src_path = self.jpg_path
-        dest_dir = self.sg_path
+        input_pattern = os.path.join(jpg_dir, f"{prefix}.%d{ext}")
+
         frame_increment = 5
         frame_width = 240
-        fps = 23.976
-        for _, _, seqs in pyseq.walk(src_path):
-            for seq in seqs:
-                head = seq.head()
-                tail = seq.tail()
-                start = seq.start()
-                padding_str = seq.format('%p')
-                input_pattern = os.path.join(src_path, f"{head}{padding_str}{tail}")
+        fps = self.fps
 
-                with tempfile.TemporaryDirectory(prefix="filmstrip_") as tmp_dir:
-                    tmp_pattern = os.path.join(tmp_dir, "thumb_%02d.jpeg")
-                    extract_cmd = [
+        with tempfile.TemporaryDirectory(prefix="filmstrip_") as tmp_dir:
+            tmp_pattern = os.path.join(tmp_dir, "thumb_%02d.jpeg")
+            extract_cmd = [
                         "ffmpeg",
                         "-loglevel", "error",
-                        "-start_number", str(start),
+                        "-start_number", str(start_frame),
                         "-i", input_pattern,
-                        "-vf", f"select='not(mod((n-{start})\\,{frame_increment}))',setpts='N/({fps}*TB)',scale={frame_width}:-1",
+                        "-vf", f"select='not(mod((n-{start_frame})\\,{frame_increment}))',setpts='N/({fps}*TB)',scale={frame_width}:-1",
                         "-sws_flags", "lanczos",
                         "-qscale:v", "2",
                         "-pix_fmt", "yuvj420p",
                         "-f", "image2",
                         tmp_pattern
                     ]
-                    #ImageMagick
-                    result = subprocess.run(extract_cmd)
-                    if result.returncode != 0:
-                        logger.error(f"Error occurred while extracting jpgs for flimstrip")
-                        return False
-                    montage_name = self.make_file_name(self.sg_path, "montage") + ".jpg"
-                    output_dir = os.path.join(dest_dir, montage_name)
-                    concat_cmd = [
-                        "convert",
-                        "+append",
-                        os.path.join(tmp_dir, "thumb_*.jpeg"),
-                        output_dir
-                    ]
-                    subprocess.run(" ".join(concat_cmd), shell=True)
-                    if result.returncode != 0:
-                        logger.error(f"Error occurred while making flimstrip jpg")
-                        return False
-                    print(f"MONTAGE successfully created: {montage_name}")
-                    return output_dir
-        return False
-    
-    def jpgs_to_thumbnail(self):
-        src_path = self.jpg_path
-        dest_dir = self.sg_path
+            result = subprocess.run(extract_cmd)
+            if result.returncode != 0:
+                logger.error(f"Error occurred while extracting jpgs for flimstrip")
+                print(f"Error occurred while extracting jpgs for flimstrip")
+                return False
+            
+            # ImageMagick
+            montage_name = self.make_file_name(self.sg_path, "montage") + ".jpg"
+            output_path  = os.path.join(self.sg_path, montage_name)
+            concat_cmd = [
+                "convert",
+                "+append",
+                os.path.join(tmp_dir, "thumb_*.jpeg"),
+                output_path
+            ]
+            subprocess.run(" ".join(concat_cmd), shell=True)
+            if result.returncode != 0:
+                logger.error(f"Error occurred while making flimstrip jpg")
+                print(f"Error occurred while making flimstrip jpg")
+                return False
+            print(f"MONTAGE successfully created: {montage_name}")
+            return output_path
 
-        thumbnail_name = self.make_file_name(self.sg_path,"thumbnail") + ".jpg"
-
-        for _, _, seqs in pyseq.walk(src_path):
-            for seq in seqs:
-                head = seq.head()
-                tail = seq.tail()
-                start = seq.start()
-                padding_str = seq.format('%p')
-                # ex : "%07d" % 1 >>> "0000001"
-                first_frame = padding_str % start
-                input_path = os.path.join(src_path, f"{head}{first_frame}{tail}")
-                output_path = os.path.join(dest_dir, thumbnail_name)
-                print(f"THUMBNAIL successfully created: {thumbnail_name}")
-                shutil.copyfile(input_path, output_path)
-                return output_path
-        return False
+    def _jpgs_to_thumbnail(self, jpg_paths):
+        thumbnail_name = self.make_file_name(self.sg_path, 'thumbnail') + '.jpg'
+        output_path    = os.path.join(self.sg_path, thumbnail_name)
+        first_jpg = jpg_paths[0]
+        shutil.copyfile(first_jpg, output_path)
+        print(f"THUMBNAIL successfully created: {thumbnail_name}")
+        return output_path
