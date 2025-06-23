@@ -3,6 +3,7 @@ import subprocess
 import json
 import re
 import os
+from .util import get_timecode
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
 from openpyxl.utils import get_column_letter
@@ -55,6 +56,7 @@ def export_metadata(app_instance, date_path):
             # EXR sequnece 폴더의 첫 프레임을 thumnail(JPG)로 변환
             if ext == ".exr":
                 first_frame_path = seq[0].path
+                last_frame_path = seq[-1].path
                 thumb_name = scan_name + ".jpg"
                 thumb_path = os.path.join(thumbnails_dir, thumb_name)
                 # If thumbnail not exist, make thumbnail
@@ -85,6 +87,18 @@ def export_metadata(app_instance, date_path):
             meta = json.loads(result.stdout)[0]
             meta["scan name"] = scan_name
             meta["thumbnail"] = thumb_path
+            meta["resolution"] = meta.get("ImageSize", "")
+            meta["file type"]  = meta.get("FileType", "")
+            meta["start frame"] = seq.start()
+            meta["end frame"] = seq.end()
+            meta["duration"] = seq.length()
+            meta["fps"] = meta.get("FramesPerSecond", "")
+            meta["date"] = meta.get("DateTimeOriginal", "")
+
+            timecode_in = get_timecode(first_frame_path)
+            meta["timecode in"] = timecode_in
+            timecode_out = get_timecode(last_frame_path)
+            meta["timecode out"] = timecode_out
             meta_list.append(meta)
     return meta_list
 
@@ -159,16 +173,15 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
     ws = wb.active
     ws.title = "Metadata"
 
-    default_fields = ["check", "thumbnail", "shot name", "seq name", "scan name"]
-    all_keys_set = set()
-    for meta_data in meta_data_list:
-        for key in meta_data.keys():
-            all_keys_set.add(key)
-
-    all_keys_set -= set(default_fields)
+    default_fields = ["check", "thumbnail", "shot name", 
+                    "seq name", "scan name", "resolution", 
+                    "file type", "start frame", "end frame", 
+                    "duration", "fps", "date", 
+                    "timecode in", "timecode out"
+                    ]
 
     # append headers
-    all_fields = default_fields + list(all_keys_set) 
+    all_fields = default_fields 
     ws.append(all_fields)
 
     # Insert metadata into the worksheet by iterating list of dictionaries
@@ -195,6 +208,8 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
         col_letter = get_column_letter(all_fields.index("check") + 1)
         cell_ref = f"{col_letter}{row_idx}"
         ws[cell_ref] = checked
+
+        # Handle Timecode col
     
     xl_path = os.path.join(date_directory_path, xl_name)
     wb.save(xl_path)
