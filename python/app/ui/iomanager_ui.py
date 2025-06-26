@@ -34,6 +34,7 @@ class IOManagerWidget(QWidget):
         self.excel_label = QLabel("Ready to load")
         self.excel_save_btn = QPushButton("Save Excel")
         self.select_excel_btn = QPushButton("Select Excel")
+        self.validate_version_btn = QPushButton("Version")
         self.publish_btn = QPushButton("Publish")
 
         # Layout
@@ -45,6 +46,10 @@ class IOManagerWidget(QWidget):
         excel_btn_layout2 = QHBoxLayout()
         excel_container = QVBoxLayout()
         excel_label_conatainer = QVBoxLayout()
+        validate_group = QGroupBox("Validate")
+        validate_btn_layout = QHBoxLayout()
+        action_group = QGroupBox("Action")
+        action_btn_layout = QHBoxLayout()
         
         shot_select_container.addWidget(p_label)
         shot_select_container.addWidget(self.project_label)
@@ -60,9 +65,18 @@ class IOManagerWidget(QWidget):
         excel_container.addLayout(excel_btn_layout)
         excel_container.addLayout(excel_btn_layout2)
         excel_group.setLayout(excel_container)
+
+        validate_btn_layout.addWidget(self.validate_version_btn)
+        validate_group.setLayout(validate_btn_layout)
+
+        action_btn_layout.addWidget(self.publish_btn)
+        action_group.setLayout(action_btn_layout)
+
         bottom_layout.addLayout(excel_label_conatainer)
         bottom_layout.addWidget(excel_group)
-        bottom_layout.addWidget(self.publish_btn)
+        bottom_layout.addWidget(validate_group)
+        bottom_layout.addWidget(action_group)
+        # bottom_layout.addWidget(self.publish_btn)
 
         main_layout.addLayout(shot_select_container)
         main_layout.addWidget(self.table)

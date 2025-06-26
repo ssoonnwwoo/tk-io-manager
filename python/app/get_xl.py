@@ -86,15 +86,15 @@ def export_metadata(app_instance, date_path):
             # ex) result(string) -> meta(json) 
             meta = json.loads(result.stdout)[0]
             meta["scan name"] = scan_name
+            meta["scan path"] = meta.get("Directory", "")
             meta["thumbnail"] = thumb_path
             meta["resolution"] = meta.get("ImageSize", "")
             meta["file type"]  = meta.get("FileType", "")
-            meta["start frame"] = seq.start()
-            meta["end frame"] = seq.end()
+            meta["start frame"] = 1001
+            meta["end frame"] = 1001 + seq.length()
             meta["duration"] = seq.length()
             meta["fps"] = meta.get("FramesPerSecond", "")
             meta["date"] = meta.get("DateTimeOriginal", "")
-
             timecode_in = get_timecode(first_frame_path)
             meta["timecode in"] = timecode_in
             timecode_out = get_timecode(last_frame_path)
@@ -173,8 +173,8 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
     ws = wb.active
     ws.title = "Metadata"
 
-    default_fields = ["check", "thumbnail", "shot name", 
-                    "seq name", "scan name", "resolution", 
+    default_fields = ["check", "thumbnail", "version", "shot name", 
+                    "seq name", "scan name", "scan path", "resolution", 
                     "file type", "start frame", "end frame", 
                     "duration", "fps", "date", 
                     "timecode in", "timecode out"
@@ -209,8 +209,7 @@ def save_list_as_xlsx(app_instance, meta_data_list, date_directory_path, xl_name
         cell_ref = f"{col_letter}{row_idx}"
         ws[cell_ref] = checked
 
-        # Handle Timecode col
-    
+
     xl_path = os.path.join(date_directory_path, xl_name)
     wb.save(xl_path)
 

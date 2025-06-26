@@ -27,7 +27,7 @@ def update_table(app_instance):
 
     for row_idx, row_data in enumerate(data_rows):
         checkbox = QtGui.QCheckBox()
-        # checkbox.clicked.connect(lambda _, row=row_idx: on_checkbox_clicked(app_instance, row, xlsx_path))
+        checkbox.clicked.connect(lambda _, row=row_idx: on_checkbox_clicked(app_instance, row, xlsx_path))
         app_instance.iomanager_ui.table.setCellWidget(row_idx, check_idx, checkbox)
 
         for col_idx, cell in enumerate(row_data):
@@ -45,7 +45,6 @@ def update_table(app_instance):
                 item.setFlags(item.flags() | QtGui.Qt.ItemIsEditable)
                 app_instance.iomanager_ui.table.setItem(row_idx, col_idx, item)
 
-# 수정 예정
 def on_checkbox_clicked(app_instance, row, xlsx_path):
     wb = load_workbook(xlsx_path)
     ws = wb.active

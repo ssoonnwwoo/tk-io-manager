@@ -14,6 +14,7 @@ class ShotConverter:
         self.sg_path = ""
         self.jpg_path = ""
         self.fps = 0.0
+        self.start_frame = 1001
     
     def set_scandata_path(self, scandata_path):
         self.scandata_path = scandata_path
@@ -31,12 +32,16 @@ class ShotConverter:
     def set_fps(self, fps):
         self.fps = fps
 
+    # def set_start_frame(self, start_frame):
+    #     self.start_frame = start_frame
+    
+
     def set_paths(self, scandata_path, org_path, sg_path, fps):
         self.set_scandata_path(scandata_path)
         self.set_org_path(org_path)
         self.set_sg_path(sg_path)
         self.set_fps(fps)
-    
+        # self.set_start_frame(start_frame)
 
     def get_ext(self):
         for root, dirs, seqs in pyseq.walk(self.scandata_path):
@@ -57,6 +62,7 @@ class ShotConverter:
         """"
         Rename & Copy ->
         EXRs to JPGs ->
+        EXRs to MOV ->
         JPGs to Video ->
         make thumbnail & montage
         """
@@ -64,17 +70,17 @@ class ShotConverter:
         scandata_length = seq.length()
         # Rename & Copy
         file_base = self.make_file_name(self.org_path, "org") # S001_0010_org_v001
-        start_frame = 1001
+        start_frame = int(self.start_frame)
         copied_count = 0
         org_files = []
         for frame in seq:
-            new_name = f"{file_base}.{str(start_frame)}.{seq.tail()}" # S001_0010_org_v001.1001.exr
+            new_name = f"{file_base}.{str(start_frame)}{seq.tail()}" # S001_0010_org_v001.1001.exr
             dst_path = os.path.join(self.org_path, new_name)
             shutil.copyfile(frame.path, dst_path)
             org_files.append(dst_path)
             start_frame += 1
             copied_count += 1
-        print(f"{scandata_name} rename to {file_base}\nTotal {copied_count}/{scandata_length} frames are rename & moved")
+        print(f"{scandata_name} rename to {file_base}\nTotal {copied_count}/{scandata_length} frames are rename & copied")
         
         # EXRs to JPGs
         jpg_paths = []
@@ -82,7 +88,7 @@ class ShotConverter:
         converted_count = 0
         for exr_path in org_files:
             base = os.path.splitext(os.path.basename(exr_path))[0]
-            jpg_name = base + "jpg" # S001_0010_org_v001.1001.jpg
+            jpg_name = base + ".jpg" # S001_0010_org_v001.1001.jpg
             jpg_path = os.path.join(self.jpg_path, jpg_name)
             if self.exr_to_jpg(exr_path, jpg_path):
                 jpg_paths.append(jpg_path)
@@ -93,8 +99,9 @@ class ShotConverter:
                 result_paths = {"mp4" : None, "webm" : None, "montage" : None, "thumbnail" : None}
                 return result_paths
         
-        mp4 = self._jpgs_to_video(jpg_paths, vformat="mp4")
-        webm = self._jpgs_to_video(jpg_paths, vformat="webm")
+        mp4 = self._seq_to_video(jpg_paths, vformat="mp4")
+        webm = self._seq_to_video(jpg_paths, vformat="webm")
+        mov = self._seq_to_video(jpg_paths, vformat="mov")
         montage = self._jpgs_to_montage(jpg_paths)
         thumbnail = self._jpgs_to_thumbnail(jpg_paths)
 
@@ -144,38 +151,59 @@ class ShotConverter:
             return False
         return True
 
-    def _jpgs_to_video(self, jpg_paths, vformat='mp4'):
-        first = jpg_paths[0]
+    def _seq_to_video(self, seq, vformat='mp4'):
+        first = seq[0]
         dirname, fname = os.path.split(first) 
         base, _ = os.path.splitext(fname) # "S038_0020_org_v003.1001"
         prefix, num = base.rsplit('.', 1) # prefix="S038_0020_org_v003", num="1001"
         start_frame = int(num)
         input_pattern = os.path.join(dirname, f"{prefix}.%d.jpg")
-        fps = f"{self.fps:.3f}"
+        fps = round(float(self.fps), 4)
+        fps = f"{fps:.3f}"
         output_name = self.make_file_name(self.sg_path, 'plate') + f".{vformat}"
         output_path = os.path.join(self.sg_path, output_name)
-        if vformat == "mp4":
-            codec = "libx264"
-            pix_fmt = "yuv420p"
-        elif vformat == "webm":
-            codec = "libvpx"
-            pix_fmt = "yuv420p"
-        else:
-            logger.error(f"Unsupported format: {vformat}")
-            return False
-
+        
         cmd = [
             "ffmpeg",
-            "-loglevel", "error",           
+            "-loglevel", "error",
             "-y",
             "-start_number", str(start_frame),
             "-framerate", fps,
+            "-f", "image2",
             "-i", input_pattern,
-            "-c:v", codec,
-            "-crf", "23",
-            "-pix_fmt", pix_fmt,
-            output_path,
         ]
+
+        if vformat == "mp4":
+            # H.264, 8bit
+            cmd += [
+                "-c:v", "libx264",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+            ]
+        elif vformat == "webm":
+            # VP8/VP9, 8bit
+            cmd += [
+                "-c:v", "libvpx",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+            ]
+
+        elif vformat == "mov":
+            cmd += [
+                "-vf", "eq=gamma=2.2,format=yuv422p10le",
+                "-c:v", "prores_ks",
+                "-profile:v", "3",           
+                "-pix_fmt", "yuv422p10le",
+                "-color_primaries", "bt709",
+                "-color_trc",      "bt709",
+                "-colorspace",     "bt709",
+            ]
+
+        else:
+            logger.error(f"Unsupported format: {vformat}")
+            return False
+        
+        cmd.append(output_path)
 
         result = subprocess.run(cmd)
         if result.returncode != 0:
